@@ -8,20 +8,20 @@ require "tmpdir"
 # Stream events from files from a S3 bucket.
 #
 # Each line from each file generates an event.
-# Files ending in '.gz' are handled as gzip'ed files.
+# Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config_name "s3"
   milestone 1
 
-  # TODO(sissel): refactor to use 'line' codec (requires removing both gzip
+  # TODO(sissel): refactor to use `line` codec (requires removing both gzip
   # support and readline usage). Support gzip through a gzip codec! ;)
   default :codec, "plain"
 
   # The credentials of the AWS account used to access the bucket.
   # Credentials can be specified:
-  # - As an ["id","secret"] array
-  # - As a path to a file containing AWS_ACCESS_KEY_ID=... and AWS_SECRET_ACCESS_KEY=...
-  # - In the environment, if not set (using variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
+  # - As an `["id","secret"]` array
+  # - As a path to a file containing `AWS_ACCESS_KEY_ID=...` and `AWS_SECRET_ACCESS_KEY=...`
+  # - In the environment, if not set (using variables `AWS_ACCESS_KEY_ID` and `AWS_SECRET_ACCESS_KEY`)
   config :credentials, :validate => :array, :default => []
 
   # The name of the S3 bucket.
@@ -43,7 +43,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   # Where to write the since database (keeps track of the date
   # the last handled file was added to S3). The default will write
-  # sincedb files to some path matching "$HOME/.sincedb*"
+  # sincedb files to some path matching `$HOME/.sincedb*`
   config :sincedb_path, :validate => :string, :default => nil
 
   # Name of a S3 bucket to backup processed files to.
