@@ -241,7 +241,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     else
       @codec.decode(line) do |event|
         decorate(event)
-		event["path"] = filename
+        event["path"] = filename
         unless metadata[:version].nil?
           event["cloudfront_version"] = metadata[:version]
         end
