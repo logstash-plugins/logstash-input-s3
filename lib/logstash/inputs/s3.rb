@@ -214,11 +214,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       if filename.end_with?('.gz')
         gz = Zlib::GzipReader.new(file)
         gz.each_line do |line|
-          metadata = process_line(queue, metadata, line)
+          metadata = process_line(queue, metadata, filename, line)
         end
       else
         file.each do |line|
-          metadata = process_line(queue, metadata, line)
+          metadata = process_line(queue, metadata, filename, line)
         end
       end
     end
@@ -226,7 +226,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end # def process_local_log
 
   private
-  def process_line(queue, metadata, line)
+  def process_line(queue, metadata, filename, line)
 
     if /#Version: .+/.match(line)
       junk, version = line.strip().split(/#Version: (.+)/)
@@ -241,6 +241,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     else
       @codec.decode(line) do |event|
         decorate(event)
+		event["path"] = filename
         unless metadata[:version].nil?
           event["cloudfront_version"] = metadata[:version]
         end
