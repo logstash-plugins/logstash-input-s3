@@ -65,9 +65,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Ruby style regexp of keys to exclude from the bucket
   config :exclude_pattern, :validate => :string, :default => nil
 
-
-  config :since_db_backend, :validate => ["local", "s3"]
-
   public
   def register
     require "digest/md5"
@@ -78,11 +75,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
     if @sincedb_path.nil?
-      @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
-      raise ConfigurationError.new('No HOME or sincedb_path set')
-    else
       sincedb_file = File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+      @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
       @sincedb = SinceDB::File.new(sincedb_file)
+    else
+      @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
+      @sincedb = SinceDB::File.new(@sincedb_path)
     end
 
     s3 = get_s3object
