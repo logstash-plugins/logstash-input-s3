@@ -90,6 +90,138 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def register
 
+
+  public
+  def run(queue)
+    Stud.interval(@interval) do
+      process_files(queue)
+    end
+  end # def run
+
+  public
+  def list_new_files
+    objects = {}
+
+    @s3bucket.objects.with_prefix(@prefix).each do |log|
+      @logger.debug("S3 input: Found key", :key => log.key)
+
+      unless ignore_filename?(log.key)
+        if sincedb.newer?(log.last_modified)
+          objects[log.key] = log.last_modified
+          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
+        end
+      end
+    end
+    return objects.keys.sort {|a,b| objects[a] <=> objects[b]}
+  end # def fetch_new_files
+
+
+  public
+  def backup_to_bucket(object, key)
+    unless @backup_to_bucket.nil?
+      backup_key = "#{@backup_add_prefix}#{key}"
+      if @delete
+        object.move_to(backup_key, :bucket => @backup_bucket)
+      else
+        object.copy_to(backup_key, :bucket => @backup_bucket)
+      end
+    end
+  end
+
+  public
+  def backup_to_dir(filename)
+    unless @backup_to_dir.nil?
+      FileUtils.cp(filename, @backup_to_dir)
+    end
+  end
+
+  private
+  def process_local_log(queue, filename)
+    @codec.decode(File.open(filename, 'rb')) do |event|
+      decorate(event)
+      queue << event
+    end
+  end # def process_local_log
+  
+  private
+  def sincedb 
+    @sincedb ||= if @sincedb_path.nil?
+                    @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
+                    SinceDB::File.new(sincedb_file)
+                  else
+                    @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
+                    SinceDB::File.new(@sincedb_path)
+                  end
+  end
+
+  private
+  def sincedb_file
+    File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+  end
+
+  private
+  def process_files(queue, since=nil)
+    objects = list_new_files
+    objects.each do |key|
+      @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
+
+      lastmod = @s3bucket.objects[key].last_modified
+
+      process_log(queue, key)
+
+      sincedb.write(lastmod)
+    end
+  end # def process_files
+
+  private
+  def ignore_filename?(filename)
+    if (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
+      return true
+    elsif @exclude_pattern.nil?
+      return false
+    elsif filename =~ Regexp.new(@exclude_pattern)
+      return true
+    else
+      return false
+    end
+  end
+
+  private
+  def process_log(queue, key)
+    object = @s3bucket.objects[key]
+
+    tmp = Stud::Temporary.directory("logstash-")
+
+    filename = File.join(tmp, File.basename(key))
+
+    download_remote_file(object, filename)
+
+    process_local_log(queue, filename)
+
+    backup_to_bucket(object, key)
+    backup_to_dir(filename)
+
+    delete_file_from_bucket(object)
+  end
+
+  private
+  def download_remote_file(remote_object, local_filename)
+    @logger.debug("S3 input: Download remove file", :remote_key => remote_object.key, :local_filename => local_filename)
+    File.open(local_filename, 'wb') do |s3file|
+      remote_object.read do |chunk|
+        s3file.write(chunk)
+      end
+    end
+  end
+
+  private
+  def delete_file_from_bucket(object)
+    if @delete and @backup_to_bucket.nil?
+      object.delete()
+    end
+  end
+
+  private
   def get_region
     # TODO: (ph) Deprecated, it will be removed
     if @region_endpoint && !@region_endpoint.empty? && !@region
@@ -99,6 +231,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
+  private
   def get_s3object
     # TODO: (ph) Deprecated, it will be removed
     if @credentials.length == 1
@@ -133,143 +266,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  public
+  private
   def aws_service_endpoint(region)
     return { :s3_endpoint => region }
-  end
-
-  public
-  def run(queue)
-    Stud.interval(@interval) do
-      process_files(queue)
-    end
-  end # def run
-
-  private
-  def process_files(queue, since=nil)
-    objects = list_new_files
-    objects.each do |key|
-      @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
-
-      lastmod = @s3bucket.objects[key].last_modified
-
-      process_log(queue, key)
-
-      sincedb.write(lastmod)
-    end
-  end # def process_files
-
-  public
-  def list_new_files
-    objects = {}
-
-    @s3bucket.objects.with_prefix(@prefix).each do |log|
-      @logger.debug("S3 input: Found key", :key => log.key)
-
-      unless ignore_filename?(log.key)
-
-        if sincedb.newer?(log.last_modified)
-          objects[log.key] = log.last_modified
-          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-        end
-      end
-    end
-    return objects.keys.sort {|a,b| objects[a] <=> objects[b]}
-  end # def fetch_new_files
-
-  private
-  def ignore_filename?(filename)
-    if (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
-      return true
-    elsif @exclude_pattern.nil?
-      return false
-    elsif filename =~ Regexp.new(@exclude_pattern)
-      return true
-    else
-      return false
-    end
-  end
-
-  private
-  def process_log(queue, key)
-    object = @s3bucket.objects[key]
-
-    tmp = Stud::Temporary.directory("logstash-")
-
-    filename = File.join(tmp, File.basename(key))
-
-    download_remote_file(object, filename)
-
-    process_local_log(queue, filename)
-
-    backup_to_bucket(object, key)
-    backup_to_dir(filename)
-
-    delete_file_from_bucket()
-  end
-
-  def download_remote_file(remote_object, local_filename)
-    @logger.debug("S3 input: Download remove file", :remote_key => remote_object.key, :local_filename => local_filename)
-    File.open(local_filename, 'wb') do |s3file|
-      remote_object.read do |chunk|
-        s3file.write(chunk)
-      end
-    end
-  end
-
-  def delete_file_from_bucket
-    if @delete and @backup_to_bucket.nil?
-      object.delete()
-    end
-  end
-
-  public
-  def backup_to_bucket(object, key)
-    unless @backup_to_bucket.nil?
-      backup_key = "#{@backup_add_prefix}#{key}"
-      if @delete
-        object.move_to(backup_key, :bucket => @backup_bucket)
-      else
-        object.copy_to(backup_key, :bucket => @backup_bucket)
-      end
-    end
-  end
-
-  public
-  def backup_to_dir(filename)
-    unless @backup_to_dir.nil?
-      FileUtils.cp(filename, @backup_to_dir)
-    end
-  end
-
-  def delete_file_from_bucket
-    if @delete and @backup_to_bucket.nil?
-      object.delete()
-    end
-  end
-
-  private
-  def process_local_log(queue, filename)
-    @codec.decode(File.open(filename, 'rb')) do |event|
-      decorate(event)
-      queue << event
-    end
-  end # def process_local_log
-  
-  private
-  def sincedb 
-    @sincedb ||= if @sincedb_path.nil?
-                    @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
-                    SinceDB::File.new(sincedb_file)
-                  else
-                    @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
-                    SinceDB::File.new(@sincedb_path)
-                  end
-  end
-
-  private
-  def sincedb_file
-    File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
   end
 
   module SinceDB

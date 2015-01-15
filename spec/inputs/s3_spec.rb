@@ -8,7 +8,10 @@ require "aws-sdk"
 require "stud/temporary"
 
 describe LogStash::Inputs::S3 do
-  before { AWS.stub! }
+  before do
+    AWS.stub!
+    Thread.abort_on_exception = true
+  end
   let(:day) { 3600 * 24 }
   let(:settings) {
     {
