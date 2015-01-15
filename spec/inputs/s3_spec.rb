@@ -22,6 +22,8 @@ describe LogStash::Inputs::S3 do
   }
 
   describe "#list_new_files" do
+    before { allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list } }
+
     let(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
     let(:objects_list) {
       [
@@ -32,16 +34,12 @@ describe LogStash::Inputs::S3 do
     }
 
     it 'should allow user to exclude files from the s3 bucket' do
-      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list }
-
       config = LogStash::Inputs::S3.new(settings.merge({ "exclude_pattern" => "^exclude" }))
       config.register
       expect(config.list_new_files).to eq([present_object.key])
     end
 
     it 'should support not providing a exclude pattern' do
-      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list }
-
       config = LogStash::Inputs::S3.new(settings)
       config.register
       expect(config.list_new_files).to eq(objects_list.map(&:key))
@@ -64,7 +62,6 @@ describe LogStash::Inputs::S3 do
     end
 
     it 'should ignore files older than X' do
-      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list }
       config = LogStash::Inputs::S3.new(settings.merge({ 'backup_add_prefix' => 'exclude-this-file'}))
 
       expect_any_instance_of(LogStash::Inputs::S3::SinceDB::File).to receive(:read).exactly(objects_list.size) { Time.now - day }
@@ -122,8 +119,6 @@ describe LogStash::Inputs::S3 do
     end
 
     it 'should support doing local backup of files' do
-      backup_dir = Dir.mktmpdir
-
       Stud::Temporary.directory do |backup_dir|
         Stud::Temporary.file do |source_file|
           backup_file = File.join(backup_dir.to_s, Pathname.new(source_file.path).basename.to_s)
@@ -132,7 +127,7 @@ describe LogStash::Inputs::S3 do
 
           config.backup_to_dir(source_file)
 
-          File.exists?(backup_file).should be_true
+          expect(File.exists?(backup_file)).to be_true
         end
       end
     end
@@ -140,11 +135,12 @@ describe LogStash::Inputs::S3 do
     it 'should accepts a list of credentials for the aws-sdk, this is deprecated' do
       old_credentials_settings = {
         "credentials" => ['1234', 'secret'],
+        "backup_to_dir" => "/tmp/mybackup",
         "bucket" => "logstash-test"
       }
 
-      config = LogStash::Inputs::S3.new(settings.merge({ "backup_to_dir" => "/tmp/mybackup" }))
-      config.register
+      config = LogStash::Inputs::S3.new(old_credentials_settings)
+      expect{ config.register }.not_to raise_error
     end
   end
 end
