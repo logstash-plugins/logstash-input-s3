@@ -174,7 +174,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         end
       end
     end
-    return sorted_objects = objects.keys.sort {|a,b| objects[a] <=> objects[b]}
+    return objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
 
   private
