@@ -74,15 +74,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
-    if @sincedb_path.nil?
-      sincedb_file = File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
-      @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
-      @sincedb = SinceDB::File.new(sincedb_file)
-    else
-      @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
-      @sincedb = SinceDB::File.new(@sincedb_path)
-    end
-
     s3 = get_s3object
 
     @s3bucket = s3.buckets[@bucket]
@@ -164,7 +155,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
       process_log(queue, key)
 
-      @sincedb.write(lastmod)
+      sincedb.write(lastmod)
     end
   end # def process_files
 
@@ -177,7 +168,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
       unless ignore_filename?(log.key)
 
-        if @sincedb.newer?(log.last_modified)
+        if sincedb.newer?(log.last_modified)
           objects[log.key] = log.last_modified
           @logger.debug("S3 input: Adding to objects[]", :key => log.key)
         end
@@ -264,6 +255,22 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       queue << event
     end
   end # def process_local_log
+  
+  private
+  def sincedb 
+    @sincedb ||= if @sincedb_path.nil?
+                    @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
+                    SinceDB::File.new(sincedb_file)
+                  else
+                    @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
+                    SinceDB::File.new(@sincedb_path)
+                  end
+  end
+
+  private
+  def sincedb_file
+    File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+  end
 
   module SinceDB
     class File
