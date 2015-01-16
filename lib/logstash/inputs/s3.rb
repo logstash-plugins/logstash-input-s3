@@ -33,7 +33,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # The AWS region for your bucket.
   config :region_endpoint, :validate => ["us-east-1", "us-west-1", "us-west-2",
                                 "eu-west-1", "ap-southeast-1", "ap-southeast-2",
-                                "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :default => "us-east-1", :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
+                                "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
 
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
@@ -224,7 +224,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   private
   def get_region
     # TODO: (ph) Deprecated, it will be removed
-    if @region_endpoint && !@region_endpoint.empty? && !@region
+    if @region_endpoint
       @region_endpoint
     else
       @region
