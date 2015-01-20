@@ -16,7 +16,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   include LogStash::PluginMixins::AwsConfig
 
   config_name "s3"
-  milestone 1
 
   default :codec, "line"
 
