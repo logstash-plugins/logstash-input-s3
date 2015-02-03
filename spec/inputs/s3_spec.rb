@@ -133,14 +133,16 @@ describe LogStash::Inputs::S3 do
     end
 
     it 'should accepts a list of credentials for the aws-sdk, this is deprecated' do
-      old_credentials_settings = {
-        "credentials" => ['1234', 'secret'],
-        "backup_to_dir" => "/tmp/mybackup",
-        "bucket" => "logstash-test"
-      }
+      Stud::Temporary.directory do |tmp_directory|
+        old_credentials_settings = {
+          "credentials" => ['1234', 'secret'],
+          "backup_to_dir" => tmp_directory,
+          "bucket" => "logstash-test"
+        }
 
-      config = LogStash::Inputs::S3.new(old_credentials_settings)
-      expect{ config.register }.not_to raise_error
+        config = LogStash::Inputs::S3.new(old_credentials_settings)
+        expect{ config.register }.not_to raise_error
+      end
     end
   end
 end
