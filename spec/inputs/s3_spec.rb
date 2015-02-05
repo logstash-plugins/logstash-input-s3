@@ -24,7 +24,7 @@ describe LogStash::Inputs::S3 do
   describe "#list_new_files" do
     before { allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list } }
 
-    let(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
+    let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
     let(:objects_list) {
       [
         double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day),
@@ -68,6 +68,21 @@ describe LogStash::Inputs::S3 do
       config.register
 
       expect(config.list_new_files).to eq([present_object.key])
+    end
+
+    it 'should ignore file if the file match the prefix' do
+        prefix = 'mysource/'
+
+        objects_list = [
+          double(:key => prefix, :last_modified => Time.now),
+          present_object
+        ]
+
+        allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(prefix) { objects_list }
+
+        config = LogStash::Inputs::S3.new(settings.merge({ 'prefix' => prefix }))
+        config.register
+        expect(config.list_new_files).to eq([present_object.key])
     end
 
     it 'should sort return object sorted by last_modification date with older first' do

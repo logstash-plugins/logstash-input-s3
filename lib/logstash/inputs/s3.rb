@@ -64,6 +64,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Ruby style regexp of keys to exclude from the bucket
   config :exclude_pattern, :validate => :string, :default => nil
 
+  # Set the directory where logstash will store the tmp files before processing them.
+  # default to the current OS temporary directory in linux /tmp/logstash
+  config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
+
   public
   def register
     require "digest/md5"
@@ -136,6 +140,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def process_local_log(queue, filename)
+    @logger.debug('Processing file', :filename => filename)
+
     @codec.decode(File.open(filename, 'rb')) do |event|
       decorate(event)
       queue << event
@@ -148,7 +154,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
                   else
-                    @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
+                    @logger.info("Using the provided sincedb_path",
+                                 :sincedb_path => @sincedb_path)
                     SinceDB::File.new(@sincedb_path)
                   end
   end
@@ -174,7 +181,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def ignore_filename?(filename)
-    if (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
+    if @prefix == filename
+      return true
+    elsif (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
       return true
     elsif @exclude_pattern.nil?
       return false
@@ -189,9 +198,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def process_log(queue, key)
     object = @s3bucket.objects[key]
 
-    tmp = Stud::Temporary.directory("logstash-")
-
-    filename = File.join(tmp, File.basename(key))
+    filename = File.join(temporary_directory, File.basename(key))
 
     download_remote_file(object, filename)
 
