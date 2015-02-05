@@ -17,7 +17,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   config_name "s3"
 
-  default :codec, "line"
+  default :codec, "plain"
 
   # DEPRECATED: The credentials of the AWS account used to access the bucket.
   # Credentials can be specified:
@@ -64,6 +64,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Ruby style regexp of keys to exclude from the bucket
   config :exclude_pattern, :validate => :string, :default => nil
 
+  # Set the directory where logstash will store the tmp files before processing them.
+  # default to the current OS temporary directory in linux /tmp/logstash
+  config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
+
   public
   def register
     require "digest/md5"
@@ -89,7 +93,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def register
 
-
   public
   def run(queue)
     Stud.interval(@interval) do
@@ -114,7 +117,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     return objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
 
-
   public
   def backup_to_bucket(object, key)
     unless @backup_to_bucket.nil?
@@ -134,33 +136,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
-  def process_local_log(queue, filename)
-    @codec.decode(File.open(filename, 'rb')) do |event|
-      decorate(event)
-      queue << event
-    end
-  end # def process_local_log
-  
-  private
-  def sincedb 
-    @sincedb ||= if @sincedb_path.nil?
-                    @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
-                    SinceDB::File.new(sincedb_file)
-                  else
-                    @logger.error("S3 input: Configuration error, no HOME or sincedb_path set")
-                    SinceDB::File.new(@sincedb_path)
-                  end
-  end
-
-  private
-  def sincedb_file
-    File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
-  end
-
-  private
-  def process_files(queue, since=nil)
+  public
+  def process_files(queue)
     objects = list_new_files
+
     objects.each do |key|
       @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
 
@@ -172,9 +151,124 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def process_files
 
+
+  private
+  def process_local_log(queue, filename)
+    @logger.debug('Processing file', :filename => filename)
+
+    metadata = {}
+    # Currently codecs operates on bytes instead of stream.
+    # So all IO stuff: decompression, reading need to be done in the actual
+    # input and send as bytes to the codecs.
+    read_file(filename) do |line|
+      @codec.decode(line) do |event|
+        # We are making an assumption concerning cloudfront
+        # log format, the user will use the plain or the line codec
+        # and the message key will represent the actual line content.
+        # If the event is only metadata the event will be drop.
+        # This was the behavior of the pre 1.5 plugin.
+        #
+        # The line need to go through the codecs to replace
+        # unknown bytes in the log stream before doing a regexp match or
+        # you will get a `Error: invalid byte sequence in UTF-8'
+        if event_is_metadata?(event)
+          @logger.debug('Event is metadata, updating the current cloudfront metadata', :event => event)
+          update_metadata(metadata, event)
+        else
+          decorate(event)
+
+          event["cloudfront_version"] = metadata[:cloudfront_version] unless metadata[:cloudfront_version].nil?
+          event["cloudfront_fields"]  = metadata[:cloudfront_fields] unless metadata[:cloudfront_fields].nil?
+
+          queue << event
+        end
+      end
+    end
+  end # def process_local_log
+
+  private
+  def event_is_metadata?(event)
+    line = event['message']
+    version_metadata?(line) || fields_metadata?(line)
+  end
+
+  private
+  def version_metadata?(line)
+    line.start_with?('#Version: ')
+  end
+
+  private
+  def fields_metadata?(line)
+    line.start_with?('#Fields: ')
+  end
+
+  private 
+  def update_metadata(metadata, event)
+    line = event['message'].strip
+
+    if version_metadata?(line)
+      metadata[:cloudfront_version] = line.split(/#Version: (.+)/).last
+    end
+
+    if fields_metadata?(line)
+      metadata[:cloudfront_fields] = line.split(/#Fields: (.+)/).last
+    end
+  end
+
+  private
+  def read_file(filename, &block)
+    if gzip?(filename) 
+      read_gzip_file(filename, block)
+    else
+      read_plain_file(filename, block)
+    end
+  end
+
+  def read_plain_file(filename, block)
+    File.open(filename, 'rb') do |file|
+      file.each(&block)
+    end
+  end
+
+  private
+  def read_gzip_file(filename, block)
+    begin
+      Zlib::GzipReader.open(filename) do |decoder|
+        decoder.each_line { |line| block.call(line) }
+      end
+    rescue Zlib::Error, Zlib::GzipFile::Error => e
+      @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
+      raise e
+    end
+  end
+
+  private
+  def gzip?(filename)
+    filename.end_with?('.gz')
+  end
+  
+  private
+  def sincedb 
+    @sincedb ||= if @sincedb_path.nil?
+                    @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
+                    SinceDB::File.new(sincedb_file)
+                  else
+                    @logger.info("Using the provided sincedb_path",
+                                 :sincedb_path => @sincedb_path)
+                    SinceDB::File.new(@sincedb_path)
+                  end
+  end
+
+  private
+  def sincedb_file
+    File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+  end
+
   private
   def ignore_filename?(filename)
-    if (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
+    if @prefix == filename
+      return true
+    elsif (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
       return true
     elsif @exclude_pattern.nil?
       return false
@@ -189,9 +283,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def process_log(queue, key)
     object = @s3bucket.objects[key]
 
-    tmp = Stud::Temporary.directory("logstash-")
-
-    filename = File.join(tmp, File.basename(key))
+    filename = File.join(temporary_directory, File.basename(key))
 
     download_remote_file(object, filename)
 
