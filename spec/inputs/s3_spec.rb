@@ -2,9 +2,9 @@
 require "logstash/devutils/rspec/spec_helper"
 require "logstash/inputs/s3"
 require "logstash/errors"
-
 require "aws-sdk"
 require "stud/temporary"
+require "spec/support/helpers"
 
 describe LogStash::Inputs::S3 do
   before do
@@ -23,7 +23,7 @@ describe LogStash::Inputs::S3 do
   describe "#list_new_files" do
     before { allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list } }
 
-    let(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
+    let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
     let(:objects_list) {
       [
         double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day),
@@ -67,6 +67,21 @@ describe LogStash::Inputs::S3 do
       config.register
 
       expect(config.list_new_files).to eq([present_object.key])
+    end
+
+    it 'should ignore file if the file match the prefix' do
+        prefix = 'mysource/'
+
+        objects_list = [
+          double(:key => prefix, :last_modified => Time.now),
+          present_object
+        ]
+
+        allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(prefix) { objects_list }
+
+        config = LogStash::Inputs::S3.new(settings.merge({ 'prefix' => prefix }))
+        config.register
+        expect(config.list_new_files).to eq([present_object.key])
     end
 
     it 'should sort return object sorted by last_modification date with older first' do
@@ -141,6 +156,62 @@ describe LogStash::Inputs::S3 do
 
         config = LogStash::Inputs::S3.new(old_credentials_settings)
         expect{ config.register }.not_to raise_error
+      end
+    end
+  end
+
+  context 'when working with logs' do
+    let(:objects) { [log] }
+
+    before do
+      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects }
+      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:[]).with(log.key) { log }
+      expect(log).to receive(:read)  { |&block| block.call(File.read(log_file)) }
+    end
+
+    context 'compressed' do
+      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join('spec', 'fixtures', 'compressed.log.gz') }
+
+      it 'should process events' do
+        events = fetch_events(settings)
+        expect(events.size).to eq(2)
+      end
+    end
+
+    context 'plain text' do
+      let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join('spec', 'fixtures', 'uncompressed.log') }
+
+      it 'should process events' do
+        events = fetch_events(settings)
+        expect(events.size).to eq(2)
+      end
+    end
+
+    context 'encoded' do
+      let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join('spec', 'fixtures', 'invalid_utf8.log') }
+
+      it 'should work with invalid utf-8 log event' do
+        events = fetch_events(settings)
+        expect(events.size).to eq(2)
+      end
+    end
+
+    context 'cloudfront' do
+      let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join('spec', 'fixtures', 'cloudfront.log') }
+
+      it 'should extract metadata from cloudfront log' do
+        events = fetch_events(settings)
+
+        expect(events.size).to eq(2)
+
+        events.each do |event|
+          expect(event['cloudfront_fields']).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
+          expect(event['cloudfront_version']).to eq('1.0')
+        end
       end
     end
   end

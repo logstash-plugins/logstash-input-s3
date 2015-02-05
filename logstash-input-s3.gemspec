@@ -23,9 +23,10 @@ Gem::Specification.new do |s|
   s.add_runtime_dependency "logstash-core", '>= 1.4.0', '< 2.0.0'
   s.add_runtime_dependency 'logstash-mixin-aws'
   s.add_runtime_dependency 'logstash-codec-line'
-  s.add_runtime_dependency 'aws-sdk'
   s.add_runtime_dependency 'stud', '~> 0.0.18'
 
   s.add_development_dependency 'logstash-devutils'
+  s.add_development_dependency 'simplecov'
+  s.add_development_dependency 'coveralls'
 end
 
