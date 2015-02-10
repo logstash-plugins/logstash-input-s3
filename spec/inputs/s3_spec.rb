@@ -2,7 +2,6 @@
 require "logstash/devutils/rspec/spec_helper"
 require "logstash/inputs/s3"
 require "logstash/errors"
-require 'logstash/inputs/s3'
 
 require "aws-sdk"
 require "stud/temporary"
