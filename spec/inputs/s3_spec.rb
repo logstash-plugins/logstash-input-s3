@@ -162,6 +162,7 @@ describe LogStash::Inputs::S3 do
 
   context 'when working with logs' do
     let(:objects) { [log] }
+    let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
 
     before do
       allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects }
@@ -180,7 +181,6 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'plain text' do
-      let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join('spec', 'fixtures', 'uncompressed.log') }
 
       it 'should process events' do
@@ -190,7 +190,6 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'encoded' do
-      let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join('spec', 'fixtures', 'invalid_utf8.log') }
 
       it 'should work with invalid utf-8 log event' do
@@ -200,7 +199,6 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'cloudfront' do
-      let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join('spec', 'fixtures', 'cloudfront.log') }
 
       it 'should extract metadata from cloudfront log' do
