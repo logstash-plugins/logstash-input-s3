@@ -1,8 +1,8 @@
 require "logstash/devutils/rspec/spec_helper"
-require "spec/support/helpers"
 require "logstash/inputs/s3"
 require "aws-sdk"
 require "fileutils"
+require_relative "../support/helpers"
 
 describe LogStash::Inputs::S3, :integration => true, :s3 => true do
   before do
