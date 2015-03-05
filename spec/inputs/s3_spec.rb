@@ -172,7 +172,7 @@ describe LogStash::Inputs::S3 do
 
     context 'compressed' do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
-      let(:log_file) { File.join('spec', 'fixtures', 'compressed.log.gz') }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }
 
       it 'should process events' do
         events = fetch_events(settings)
@@ -181,7 +181,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'plain text' do
-      let(:log_file) { File.join('spec', 'fixtures', 'uncompressed.log') }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
 
       it 'should process events' do
         events = fetch_events(settings)
@@ -190,7 +190,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'encoded' do
-      let(:log_file) { File.join('spec', 'fixtures', 'invalid_utf8.log') }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'invalid_utf8.log') }
 
       it 'should work with invalid utf-8 log event' do
         events = fetch_events(settings)
@@ -199,7 +199,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'cloudfront' do
-      let(:log_file) { File.join('spec', 'fixtures', 'cloudfront.log') }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'cloudfront.log') }
 
       it 'should extract metadata from cloudfront log' do
         events = fetch_events(settings)
