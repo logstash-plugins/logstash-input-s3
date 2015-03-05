@@ -4,7 +4,7 @@ require "logstash/inputs/s3"
 require "logstash/errors"
 require "aws-sdk"
 require "stud/temporary"
-require "spec/support/helpers"
+require_relative "../support/helpers"
 
 describe LogStash::Inputs::S3 do
   before do
