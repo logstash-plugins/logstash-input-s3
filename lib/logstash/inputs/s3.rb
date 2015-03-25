@@ -179,7 +179,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
           event["cloudfront_version"] = metadata[:cloudfront_version] unless metadata[:cloudfront_version].nil?
           event["cloudfront_fields"]  = metadata[:cloudfront_fields] unless metadata[:cloudfront_fields].nil?
-	  event["path"] = key
+          event["path"] = key
   
           queue << event
         end
