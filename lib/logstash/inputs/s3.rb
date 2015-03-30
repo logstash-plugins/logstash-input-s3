@@ -71,17 +71,17 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
     @s3 = AWS::S3.new(aws_options_hash)
   end
-
+ 
   public
   def register
     require "fileutils"
     require "digest/md5"
     require "aws-sdk"
-
+    
     # required if using ruby version < 2.0
     # http://ruby.awsblog.com/post/Tx16QY1CI5GVBFT/Threading-with-the-AWS-SDK-for-Ruby
     AWS.eager_autoload!(AWS::S3)
-
+    
     @s3 = aws_s3_config
 
     unless @backup_to_bucket.nil?
