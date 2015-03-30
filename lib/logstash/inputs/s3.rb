@@ -72,15 +72,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
     @s3 = AWS::S3.new(aws_options_hash)
   end
- 
+
   public
   def register
     require "aws-sdk"
-    
+
     # required if using ruby version < 2.0
     # http://ruby.awsblog.com/post/Tx16QY1CI5GVBFT/Threading-with-the-AWS-SDK-for-Ruby
     AWS.eager_autoload!(AWS::S3)
-    
+
     @s3 = aws_s3_config
 
     unless @backup_to_bucket.nil?
@@ -142,7 +142,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   public
   def process_files(queue)
     bucket = @s3.buckets[@bucket]
-    
+
     objects = list_new_files
 
     objects.each do |key|
@@ -207,7 +207,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event['message'].strip
 
@@ -222,7 +222,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -251,9 +251,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
@@ -364,9 +364,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
+  public
   def aws_service_endpoint(region)
-    return { :s3_endpoint => region }
+    # Make the deprecated endpoint_region work
+    # TODO: (ph) Remove this after deprecation.
+
+    if @endpoint_region
+      region_to_use = @endpoint_region
+    else
+      region_to_use = @region
+    end
+
+    return {
+      :s3_endpoint => region_to_use == 'us-east-1' ? 's3.amazonaws.com' : "s3-#{region_to_use}.amazonaws.com"
+    }
   end
 
   module SinceDB
