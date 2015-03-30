@@ -4,6 +4,17 @@ This is a plugin for [Logstash](https://github.com/elasticsearch/logstash).
 
 It is fully free and fully open source. The license is Apache 2.0, meaning you are pretty much free to use it however you want in whatever way.
 
+## Required S3 Permissions
+
+This plugin, as it reads from your S3 bucket, requires the following permissions:
+
+ * `s3:HeadBucket`: This allows the plugin to determine if a bucket exists.
+ * `s3:GetBucket`: This operation lists the objects stored in a bucket.
+ * `s3:HeadObject`: This operation gets metadata on an object in the bucket.
+ * `s3:GetObject`: This operation downloads an object from the bucket.
+
+If you have `:delete` set to `true`, you'll additionally need the `s3:DeleteObject` permission.
+
 ## Documentation
 
 Logstash provides infrastructure to automatically generate documentation for this plugin. We use the asciidoc format to write documentation so any comments in the source code will be first converted into asciidoc and then into html. All plugin documentation are placed under one [central location](http://www.elasticsearch.org/guide/en/logstash/current/).

@@ -68,23 +68,25 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  def aws_s3_config
+    @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
+    @s3 = AWS::S3.new(aws_options_hash)
+  end
+ 
   public
   def register
-    require "digest/md5"
     require "aws-sdk"
-
-    @region = get_region
-
-    @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
-
-    s3 = get_s3object
-
-    @s3bucket = s3.buckets[@bucket]
+    
+    # required if using ruby version < 2.0
+    # http://ruby.awsblog.com/post/Tx16QY1CI5GVBFT/Threading-with-the-AWS-SDK-for-Ruby
+    AWS.eager_autoload!(AWS::S3)
+    
+    @s3 = aws_s3_config
 
     unless @backup_to_bucket.nil?
-      @backup_bucket = s3.buckets[@backup_to_bucket]
+      @backup_bucket = @s3.buckets[@backup_to_bucket]
       unless @backup_bucket.exists?
-        s3.buckets.create(@backup_to_bucket)
+        @s3.buckets.create(@backup_to_bucket)
       end
     end
 
@@ -103,8 +105,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   public
   def list_new_files
     objects = {}
+    bucket = @s3.buckets[@bucket]
 
-    @s3bucket.objects.with_prefix(@prefix).each do |log|
+    bucket.objects.with_prefix(@prefix).each do |log|
       @logger.debug("S3 input: Found key", :key => log.key)
 
       unless ignore_filename?(log.key)
@@ -138,12 +141,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def process_files(queue)
+    bucket = @s3.buckets[@bucket]
+    
     objects = list_new_files
 
     objects.each do |key|
       @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
 
-      lastmod = @s3bucket.objects[key].last_modified
+      lastmod = bucket.objects[key].last_modified
 
       process_log(queue, key)
 
@@ -281,7 +286,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def process_log(queue, key)
-    object = @s3bucket.objects[key]
+    bucket = @s3.buckets[@bucket]
+
+    object = bucket.objects[key]
 
     filename = File.join(temporary_directory, File.basename(key))
 
@@ -297,7 +304,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def download_remote_file(remote_object, local_filename)
-    @logger.debug("S3 input: Download remove file", :remote_key => remote_object.key, :local_filename => local_filename)
+    @logger.debug("S3 input: Download remote file", :remote_key => remote_object.key, :local_filename => local_filename)
     File.open(local_filename, 'wb') do |s3file|
       remote_object.read do |chunk|
         s3file.write(chunk)
