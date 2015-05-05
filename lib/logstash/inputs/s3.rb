@@ -297,7 +297,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def download_remote_file(remote_object, local_filename)
-    @logger.debug("S3 input: Download remove file", :remote_key => remote_object.key, :local_filename => local_filename)
+    @logger.debug("S3 input: Download remote file", :remote_key => remote_object.key, :local_filename => local_filename)
     File.open(local_filename, 'wb') do |s3file|
       remote_object.read do |chunk|
         s3file.write(chunk)
