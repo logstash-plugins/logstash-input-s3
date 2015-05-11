@@ -2,7 +2,6 @@
 require "logstash/inputs/base"
 require "logstash/namespace"
 require "logstash/plugin_mixins/aws_config"
-
 require "time"
 require "tmpdir"
 require "stud/interval"
@@ -70,6 +69,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def register
+    require "fileutils"
     require "digest/md5"
     require "aws-sdk"
 
@@ -91,6 +91,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     unless @backup_to_dir.nil?
       Dir.mkdir(@backup_to_dir, 0700) unless File.exists?(@backup_to_dir)
     end
+
+    FileUtils.mkdir_p(@temporary_directory) unless Dir.exist?(@temporary_directory)
   end # def register
 
   public
