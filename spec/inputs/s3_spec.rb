@@ -20,6 +20,27 @@ describe LogStash::Inputs::S3 do
     }
   }
 
+  describe "#register" do
+    subject { LogStash::Inputs::S3.new(settings) }
+
+    context "with temporary directory" do
+      let(:settings) {
+        {
+          "access_key_id" => "1234",
+          "secret_access_key" => "secret",
+          "bucket" => "logstash-test",
+          "temporary_directory" => temporary_directory
+        }
+      }
+
+      let(:temporary_directory) { Stud::Temporary.pathname }
+
+      it "creates the direct when it doesn't exist" do
+        expect { subject.register }.to change { Dir.exist?(temporary_directory) }.from(false).to(true)
+      end
+    end
+  end
+
   describe "#list_new_files" do
     before { allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list } }
 
