@@ -2,23 +2,27 @@
 require "logstash/devutils/rspec/spec_helper"
 require "logstash/inputs/s3"
 require "logstash/errors"
-require "aws-sdk"
-require "stud/temporary"
 require_relative "../support/helpers"
+require "stud/temporary"
+require "aws-sdk"
+require "fileutils"
 
 describe LogStash::Inputs::S3 do
-  before do
-    AWS.stub!
-    Thread.abort_on_exception = true
-  end
+  let(:temporary_directory) { Stud::Temporary.pathname }
   let(:day) { 3600 * 24 }
   let(:settings) {
     {
       "access_key_id" => "1234",
       "secret_access_key" => "secret",
-      "bucket" => "logstash-test"
+      "bucket" => "logstash-test",
+      "temporary_directory" => temporary_directory
     }
   }
+
+  before do
+    AWS.stub!
+    Thread.abort_on_exception = true
+  end
 
   describe "#register" do
     subject { LogStash::Inputs::S3.new(settings) }
@@ -181,6 +185,18 @@ describe LogStash::Inputs::S3 do
     end
   end
 
+  shared_examples "generated events"  do
+    it 'should process events' do
+      events = fetch_events(settings)
+      expect(events.size).to eq(2)
+    end
+
+    it "deletes the temporary file" do
+      events = fetch_events(settings)
+      expect(Dir.glob(File.join(temporary_directory, "*")).size).to eq(0)
+    end
+  end
+
   context 'when working with logs' do
     let(:objects) { [log] }
     let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
@@ -195,28 +211,20 @@ describe LogStash::Inputs::S3 do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }
 
-      it 'should process events' do
-        events = fetch_events(settings)
-        expect(events.size).to eq(2)
-      end
+
+      include_examples "generated events"
     end
 
     context 'plain text' do
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
 
-      it 'should process events' do
-        events = fetch_events(settings)
-        expect(events.size).to eq(2)
-      end
+      include_examples "generated events"
     end
 
     context 'encoded' do
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'invalid_utf8.log') }
 
-      it 'should work with invalid utf-8 log event' do
-        events = fetch_events(settings)
-        expect(events.size).to eq(2)
-      end
+      include_examples "generated events"
     end
 
     context 'cloudfront' do
@@ -225,13 +233,13 @@ describe LogStash::Inputs::S3 do
       it 'should extract metadata from cloudfront log' do
         events = fetch_events(settings)
 
-        expect(events.size).to eq(2)
-
         events.each do |event|
           expect(event['cloudfront_fields']).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
           expect(event['cloudfront_version']).to eq('1.0')
         end
       end
+
+      include_examples "generated events"
     end
   end
 end
