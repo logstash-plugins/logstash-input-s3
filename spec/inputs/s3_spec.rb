@@ -207,6 +207,20 @@ describe LogStash::Inputs::S3 do
       expect(log).to receive(:read)  { |&block| block.call(File.read(log_file)) }
     end
 
+    context "when event doesn't have a `message` field" do
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'json.log') }
+      let(:settings) {
+        {
+          "access_key_id" => "1234",
+          "secret_access_key" => "secret",
+          "bucket" => "logstash-test",
+          "codec" => "json",
+        }
+      }
+
+      include_examples "generated events"
+    end
+
     context 'compressed' do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }
