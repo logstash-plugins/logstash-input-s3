@@ -196,7 +196,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def event_is_metadata?(event)
-    line = event['message']
+    return false if event["message"].nil?
+    line = event["message"]
     version_metadata?(line) || fields_metadata?(line)
   end
 
