@@ -166,7 +166,7 @@ describe LogStash::Inputs::S3 do
 
           config.backup_to_dir(source_file)
 
-          expect(File.exists?(backup_file)).to be_true
+          expect(File.exists?(backup_file)).to eq(true)
         end
       end
     end
