@@ -77,8 +77,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
-    s3 = get_s3object
+    # required for ruby version < 2.0
+    # http://ruby.awsblog.com/post/Tx16QY1CI5GVBFT/Threading-with-the-AWS-SDK-for-Ruby
+    AWS.eager_autoload!(AWS::S3)
 
+    s3 = get_s3object
     @s3bucket = s3.buckets[@bucket]
 
     unless @backup_to_bucket.nil?
@@ -350,7 +353,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       @secret_access_key = @credentials[1]
     end
 
-    if @credentials
+    if !@credentials.empty?
       s3 = AWS::S3.new(
         :access_key_id => @access_key_id,
         :secret_access_key => @secret_access_key,
@@ -361,7 +364,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
+  public
   def aws_service_endpoint(region)
     return { :s3_endpoint => region }
   end
