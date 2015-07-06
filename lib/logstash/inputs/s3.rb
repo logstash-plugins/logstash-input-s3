@@ -50,6 +50,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # choose a new 'folder' to place the files in
   config :backup_add_prefix, :validate => :string, :default => nil
 
+  # Whether to request serverside encryption for files uploaded by the backup_to_bucket
+  # option.
+  config :backup_to_bucket_encryption, :validate => :boolean, :default => false
+
   # Path of a local directory to backup processed files to.
   config :backup_to_dir, :validate => :string, :default => nil
 
@@ -128,9 +132,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     unless @backup_to_bucket.nil?
       backup_key = "#{@backup_add_prefix}#{key}"
       if @delete
-        object.move_to(backup_key, :bucket => @backup_bucket)
+        object.move_to(backup_key, :bucket => @backup_bucket, :server_side_encryption => @backup_to_bucket_encryption ? :aes256 : nil)
       else
-        object.copy_to(backup_key, :bucket => @backup_bucket)
+        object.copy_to(backup_key, :bucket => @backup_bucket, :server_side_encryption => @backup_to_bucket_encryption ? :aes256 : nil)
       end
     end
   end
