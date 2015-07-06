@@ -50,6 +50,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # choose a new 'folder' to place the files in
   config :backup_add_prefix, :validate => :string, :default => nil
 
+  # Whether to request serverside encryption for files uploaded by the backup_to_bucket
+  # option.
+  config :backup_to_bucket_encryption, :validate => :boolean, :default => false
+
   # Path of a local directory to backup processed files to.
   config :backup_to_dir, :validate => :string, :default => nil
 
@@ -67,24 +71,27 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  def aws_s3_config
+    @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
+    @s3 = AWS::S3.new(aws_options_hash)
+  end
+
   public
   def register
     require "fileutils"
     require "digest/md5"
     require "aws-sdk"
 
-    @region = get_region
+    # required if using ruby version < 2.0
+    # http://ruby.awsblog.com/post/Tx16QY1CI5GVBFT/Threading-with-the-AWS-SDK-for-Ruby
+    AWS.eager_autoload!(AWS::S3)
 
-    @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
-
-    s3 = get_s3object
-
-    @s3bucket = s3.buckets[@bucket]
+    @s3 = aws_s3_config
 
     unless @backup_to_bucket.nil?
-      @backup_bucket = s3.buckets[@backup_to_bucket]
+      @backup_bucket = @s3.buckets[@backup_to_bucket]
       unless @backup_bucket.exists?
-        s3.buckets.create(@backup_to_bucket)
+        @s3.buckets.create(@backup_to_bucket)
       end
     end
 
@@ -105,8 +112,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   public
   def list_new_files
     objects = {}
+    bucket = @s3.buckets[@bucket]
 
-    @s3bucket.objects.with_prefix(@prefix).each do |log|
+    bucket.objects.with_prefix(@prefix).each do |log|
       @logger.debug("S3 input: Found key", :key => log.key)
 
       unless ignore_filename?(log.key)
@@ -124,9 +132,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     unless @backup_to_bucket.nil?
       backup_key = "#{@backup_add_prefix}#{key}"
       if @delete
-        object.move_to(backup_key, :bucket => @backup_bucket)
+        object.move_to(backup_key, :bucket => @backup_bucket, :server_side_encryption => @backup_to_bucket_encryption ? :aes256 : nil)
       else
-        object.copy_to(backup_key, :bucket => @backup_bucket)
+        object.copy_to(backup_key, :bucket => @backup_bucket, :server_side_encryption => @backup_to_bucket_encryption ? :aes256 : nil)
       end
     end
   end
@@ -140,12 +148,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def process_files(queue)
+    bucket = @s3.buckets[@bucket]
+
     objects = list_new_files
 
     objects.each do |key|
       @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
 
-      lastmod = @s3bucket.objects[key].last_modified
+      lastmod = bucket.objects[key].last_modified
 
       process_log(queue, key)
 
@@ -205,7 +215,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event['message'].strip
 
@@ -220,7 +230,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -249,9 +259,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
@@ -284,7 +294,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def process_log(queue, key)
-    object = @s3bucket.objects[key]
+    bucket = @s3.buckets[@bucket]
+
+    object = bucket.objects[key]
 
     filename = File.join(temporary_directory, File.basename(key))
 
@@ -361,9 +373,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
+  public
   def aws_service_endpoint(region)
-    return { :s3_endpoint => region }
+    # Make the deprecated endpoint_region work
+    # TODO: (ph) Remove this after deprecation.
+
+    if @endpoint_region
+      region_to_use = @endpoint_region
+    else
+      region_to_use = @region
+    end
+
+    return {
+      :s3_endpoint => region_to_use == 'us-east-1' ? 's3.amazonaws.com' : "s3-#{region_to_use}.amazonaws.com"
+    }
   end
 
   module SinceDB
