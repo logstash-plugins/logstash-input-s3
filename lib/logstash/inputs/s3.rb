@@ -36,6 +36,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
 
+  # If specified, user will asume this role to connect to S3 with a temporary session
+  config :role_arn , :validate => :string, :default => nil
+
+  # If role_arn its set, we give a session name to the temporal credential set
+  config :role_name, :validate => :string, :default => "logstash"
+
   # Where to write the since database (keeps track of the date
   # the last handled file was added to S3). The default will write
   # sincedb files to some path matching "$HOME/.sincedb*"
@@ -78,6 +84,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
     s3 = get_s3object
+
+    if @role_arn
+      puts @role_arn
+      provider = AWS::Core::CredentialProviders::AssumeRoleProvider.new(
+        sts: AWS::STS.new(),
+        role_arn: "linked::account::arn",
+        role_session_name: "session-name" )
+    end
+
 
     @s3bucket = s3.buckets[@bucket]
 
@@ -205,7 +220,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event['message'].strip
 
@@ -220,7 +235,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -249,9 +264,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
