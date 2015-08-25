@@ -85,15 +85,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     s3 = get_s3object
 
-    if @role_arn
-      puts @role_arn
-      provider = AWS::Core::CredentialProviders::AssumeRoleProvider.new(
-        sts: AWS::STS.new(),
-        role_arn: "linked::account::arn",
-        role_session_name: "session-name" )
-    end
-
-
     @s3bucket = s3.buckets[@bucket]
 
     unless @backup_to_bucket.nil?
@@ -366,11 +357,26 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
 
     if @credentials
-      s3 = AWS::S3.new(
-        :access_key_id => @access_key_id,
-        :secret_access_key => @secret_access_key,
-        :region => @region
-      )
+      if @role_arn
+        provider = AWS::Core::CredentialProviders::AssumeRoleProvider.new(
+          :sts => AWS::STS.new(
+            :access_key_id => @access_key_id,
+            :secret_access_key => @secret_access_key
+          ),
+          :role_arn => @role_arn,
+          :role_session_name => @role_session_name )
+
+        s3 = AWS::S3.new(
+          :credential_provider => provider,
+          :region => @region
+        )
+      else
+        s3 = AWS::S3.new(
+          :access_key_id => @access_key_id,
+          :secret_access_key => @secret_access_key,
+          :region => @region
+        )
+      end
     else
       s3 = AWS::S3.new(aws_options_hash)
     end
