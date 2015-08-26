@@ -364,7 +364,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
             :secret_access_key => @secret_access_key
           ),
           :role_arn => @role_arn,
-          :role_session_name => @role_session_name )
+          :role_session_name => @role_name )
 
         s3 = AWS::S3.new(
           :credential_provider => provider,
