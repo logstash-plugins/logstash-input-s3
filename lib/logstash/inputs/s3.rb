@@ -153,6 +153,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def process_files
 
+  public
+  def aws_service_endpoint(region)
+    return { :s3_endpoint => region }
+  end
 
   private
   def process_local_log(queue, filename)
@@ -350,22 +354,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       @secret_access_key = @credentials[1]
     end
 
-    if @credentials
-      s3 = AWS::S3.new(
-        :access_key_id => @access_key_id,
-        :secret_access_key => @secret_access_key,
-        :region => @region
-      )
-    else
-      s3 = AWS::S3.new(aws_options_hash)
-    end
+    s3 = AWS::S3.new(aws_options_hash)
   end
 
   private
-  def aws_service_endpoint(region)
-    return { :s3_endpoint => region }
-  end
-
   module SinceDB
     class File
       def initialize(file)
