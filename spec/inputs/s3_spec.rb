@@ -45,6 +45,55 @@ describe LogStash::Inputs::S3 do
     end
   end
 
+  describe '#get_s3object' do
+    subject { LogStash::Inputs::S3.new(settings) }
+
+    context 'with deprecated credentials option' do
+      let(:settings) {
+        {
+          "credentials" => ["1234", "secret"],
+          "proxy_uri" => "http://example.com",
+          "bucket" => "logstash-test",
+        }
+      }
+
+      it 'should instantiate AWS::S3 clients with a proxy set' do
+        expect(AWS::S3).to receive(:new).with({
+          :access_key_id => "1234",
+          :secret_access_key => "secret",
+          :proxy_uri => 'http://example.com',
+          :use_ssl => subject.use_ssl,
+          :s3_endpoint => subject.region,
+        })
+
+        subject.send(:get_s3object)
+      end
+    end
+
+    context 'with modern access key options' do
+      let(:settings) {
+        {
+          "access_key_id" => "1234",
+          "secret_access_key" => "secret",
+          "proxy_uri" => "http://example.com",
+          "bucket" => "logstash-test",
+        }
+      }
+
+      it 'should instantiate AWS::S3 clients with a proxy set' do
+        expect(AWS::S3).to receive(:new).with({
+          :access_key_id => "1234",
+          :secret_access_key => "secret",
+          :proxy_uri => 'http://example.com',
+          :use_ssl => subject.use_ssl,
+          :s3_endpoint => subject.region,
+        })
+
+        subject.send(:get_s3object)
+      end
+    end
+  end
+
   describe "#list_new_files" do
     before { allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list } }
 
