@@ -63,8 +63,7 @@ describe LogStash::Inputs::S3 do
           :secret_access_key => "secret",
           :proxy_uri => 'http://example.com',
           :use_ssl => subject.use_ssl,
-          :s3_endpoint => subject.region,
-        })
+        }.merge(subject.aws_service_endpoint(subject.region)))
 
         subject.send(:get_s3object)
       end
@@ -86,8 +85,8 @@ describe LogStash::Inputs::S3 do
           :secret_access_key => "secret",
           :proxy_uri => 'http://example.com',
           :use_ssl => subject.use_ssl,
-          :s3_endpoint => subject.region,
-        })
+        }.merge(subject.aws_service_endpoint(subject.region)))
+        
 
         subject.send(:get_s3object)
       end
