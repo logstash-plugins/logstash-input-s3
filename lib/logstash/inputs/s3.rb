@@ -155,7 +155,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
 
   private
-  def process_local_log(queue, filename)
+  def process_local_log(queue, filename, key)
     @logger.debug('Processing file', :filename => filename)
 
     metadata = {}
@@ -181,7 +181,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
           event["cloudfront_version"] = metadata[:cloudfront_version] unless metadata[:cloudfront_version].nil?
           event["cloudfront_fields"]  = metadata[:cloudfront_fields] unless metadata[:cloudfront_fields].nil?
-
+          event["path"] = key
+  
           queue << event
         end
       end
@@ -290,7 +291,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     download_remote_file(object, filename)
 
-    process_local_log(queue, filename)
+    process_local_log(queue, filename, key)
 
     backup_to_bucket(object, key)
     backup_to_dir(filename)
