@@ -3,7 +3,6 @@ def fetch_events(settings)
   s3 = LogStash::Inputs::S3.new(settings)
   s3.register
   s3.process_files(queue)
-  s3.close
   queue
 end
 
@@ -32,3 +31,15 @@ end
 def s3object
   AWS::S3.new
 end
+
+class TestInfiniteS3Object
+  def each
+    counter = 1
+
+    loop do
+      yield "awesome-#{counter}"
+      counter +=1
+    end
+  end
+end
+
