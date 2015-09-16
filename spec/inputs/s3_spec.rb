@@ -43,23 +43,6 @@ describe LogStash::Inputs::S3 do
         expect { subject.register }.to change { Dir.exist?(temporary_directory) }.from(false).to(true)
       end
     end
-
-    context "assume other role" do
-
-      let(:settings) {
-        {
-          "access_key_id" => "1234",
-          "secret_access_key" => "secret",
-          "bucket" => "logstash-test",
-          "role_arn" => "arn:aws:iam::0000000:role/my_assumed_role"
-        }
-      }
-
-      it "assume new sts credential " do
-        subject.register
-      end
-
-    end
   end
 
   describe "#list_new_files" do
