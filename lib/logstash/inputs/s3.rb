@@ -18,20 +18,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   default :codec, "plain"
 
-  # DEPRECATED: The credentials of the AWS account used to access the bucket.
-  # Credentials can be specified:
-  # - As an ["id","secret"] array
-  # - As a path to a file containing AWS_ACCESS_KEY_ID=... and AWS_SECRET_ACCESS_KEY=...
-  # - In the environment, if not set (using variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-  config :credentials, :validate => :array, :default => [], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
-
   # The name of the S3 bucket.
   config :bucket, :validate => :string, :required => true
-
-  # The AWS region for your bucket.
-  config :region_endpoint, :validate => ["us-east-1", "us-west-1", "us-west-2",
-                                "eu-west-1", "ap-southeast-1", "ap-southeast-2",
-                                "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
 
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
