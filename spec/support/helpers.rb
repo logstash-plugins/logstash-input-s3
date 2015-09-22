@@ -3,7 +3,7 @@ def fetch_events(settings)
   s3 = LogStash::Inputs::S3.new(settings)
   s3.register
   s3.process_files(queue)
-  s3.teardown
+  s3.close
   queue
 end
 
