@@ -33,7 +33,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
                                 "eu-west-1", "ap-southeast-1", "ap-southeast-2",
                                 "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
 
-  # If specified, the prefix of filenames in the bucket must match (not a regexp)
+  # If specified, the prefix of filenames in the bucket must match (not a full regexp but will allow matches such as "logs" => "logs/debug.log")
   config :prefix, :validate => :string, :default => nil
 
   # Where to write the since database (keeps track of the date
