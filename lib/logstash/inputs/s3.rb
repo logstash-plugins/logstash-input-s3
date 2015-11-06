@@ -405,7 +405,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       end
 
       def newer?(date)
-        date > read
+        date >= read
       end
 
       def read
