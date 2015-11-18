@@ -410,11 +410,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
       def read
         if ::File.exists?(@sincedb_path)
-          since = Time.parse(::File.read(@sincedb_path).chomp.strip)
+          content = ::File.read(@sincedb_path).chomp.strip
+          # If the file was created but we didn't have the time to write to it
+          return content.empty? ? Time.new(0) : Time.parse(content)
         else
-          since = Time.new(0)
+          return Time.new(0)
         end
-        return since
       end
 
       def write(since = nil)
