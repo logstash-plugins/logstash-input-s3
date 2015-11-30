@@ -255,6 +255,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     else
       read_plain_file(filename, block)
     end
+  rescue => e
+    # swallow an error and skip the file
+    @logger.warn("Failed to read the file. Skip processing.", :filename => filename, :exception => e.message)
   end
 
   def read_plain_file(filename, block)
@@ -265,13 +268,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_gzip_file(filename, block)
-    begin
-      Zlib::GzipReader.open(filename) do |decoder|
-        decoder.each_line { |line| block.call(line) }
-      end
-    rescue Zlib::Error, Zlib::GzipFile::Error => e
-      @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
-      raise e
+    Zlib::GzipReader.open(filename) do |decoder|
+      decoder.each_line { |line| block.call(line) }
     end
   end
 
