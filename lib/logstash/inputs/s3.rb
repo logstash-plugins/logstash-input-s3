@@ -320,11 +320,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     
     if download_remote_file(object, filename)
       if process_local_log(queue, filename)
+        lastmod = object.last_modified
         backup_to_bucket(object, key)
         backup_to_dir(filename)
         delete_file_from_bucket(object)
         FileUtils.remove_entry_secure(filename, true)
-        lastmod = object.last_modified
         sincedb.write(lastmod)
       end
     else
