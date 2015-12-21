@@ -164,11 +164,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   public
   def aws_service_endpoint(region)
     region_to_use = get_region
-
-    return {
-      :s3_endpoint => region_to_use == 'us-east-1' ?
-        's3.amazonaws.com' : "s3-#{region_to_use}.amazonaws.com"
-    }
+    s3_endpoint = case region_to_use
+                  when 'us-east-1'
+                    's3.amazonaws.com'
+                  when 'cn-north-1'
+                    "s3.#{region_to_use}.amazonaws.com.cn"
+                  else
+                    "s3-#{region_to_use}.amazonaws.com"
+                  end
+    return { :s3_endpoint => s3_endpoint }
   end
 
   private
