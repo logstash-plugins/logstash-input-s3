@@ -1,3 +1,5 @@
+## 2.0.4
+ - Fix for Error: No Such Key problem when deleting
 ## 2.0.3
  - Do not raise an exception if the sincedb file is empty, instead return the current time #66
 ## 2.0.0
