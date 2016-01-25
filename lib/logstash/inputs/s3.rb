@@ -111,7 +111,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       @logger.debug("S3 input: Found key", :key => log.key)
 
       unless ignore_filename?(log.key)
-        if sincedb.newer?(log.last_modified)
+        if log.exists? && sincedb.newer?(log.last_modified)
           objects[log.key] = log.last_modified
           @logger.debug("S3 input: Adding to objects[]", :key => log.key)
         end
