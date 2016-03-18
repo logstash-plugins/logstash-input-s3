@@ -1,3 +1,5 @@
+# 2.0.5
+  - New dependency requirements for logstash-core for the 5.0 release
 ## 2.0.4
  - Fix for Error: No Such Key problem when deleting
 ## 2.0.3
