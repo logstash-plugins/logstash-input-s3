@@ -5,6 +5,66 @@ require "logstash/inputs/s3/remote_file"
 module LogStash module Inputs class S3
   describe ProcessingPolicyValidator do
     let(:remote_file) { RemoteFile.new(s3_object) }
+    let(:s3_object) { double("s3_object", :key => "hola", :content_length => 20, :last_modified => Time.now-60) }
+
+    let(:validator_1) { ProcessingPolicyValidator::SkipEmptyFile.new }
+    let(:validator_2) { ProcessingPolicyValidator::SkipEndingDirectory.new }
+
+    context "#initialize" do
+      subject { described_class }
+
+      it "accepts multiples validator" do
+        expect(subject.new(validator_1, validator_2).count).to eq(2)
+      end
+
+      it "accepts one validator" do
+        expect(subject.new(validator_1).count).to eq(1)
+      end
+    end
+
+    context "#add_policy" do
+      subject { described_class.new(validator_1) } 
+
+      it "allows to add more validators" do
+        expect(subject.count).to eq(1)
+        subject.add_policy(validator_2)
+        expect(subject.count).to eq(2)
+      end
+
+      it "adds the validator at the end of the chain" do
+        subject.add_policy(validator_2)
+
+        expect(validator_1).to receive(:process?).ordered.and_return(true)
+        expect(validator_2).to receive(:process?).ordered.and_return(true)
+
+        subject.process?(remote_file)
+      end
+    end
+
+    context "#process?" do
+      subject { described_class.new(validator_1, validator_2) }
+
+      it "execute the validator in declarations order" do
+        expect(validator_1).to receive(:process?).ordered.and_return(true)
+        expect(validator_2).to receive(:process?).ordered.and_return(true)
+
+        subject.process?(remote_file)
+      end
+
+      context "When all the validator pass" do
+        it "accepts to process the file" do
+          expect(subject.process?(remote_file)).to be_truthy
+        end
+      end
+
+      context "When one validator fails" do
+        let(:s3_object) { double("s3_object", :key => "hola/", :content_length => 20, :last_modified => Time.now-60) }
+
+        it "doesnt accept to process" do
+          expect(subject.process?(remote_file)).to be_falsey
+        end
+      end
+    end
 
     describe ProcessingPolicyValidator::SkipEndingDirectory do
       context "when the key is a directory" do
