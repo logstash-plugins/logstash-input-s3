@@ -23,6 +23,7 @@ module LogStash module Inputs class S3
 
       def process?(remote_file)
         # @sincedb.newer?(remote_file.last_modified)
+        return true
       end
     end
 
@@ -48,11 +49,15 @@ module LogStash module Inputs class S3
     end
 
     def add_policy(*policies)
-      @policies.concat(policies)
+      @policies = @policies.concat([policies].flatten)
     end
 
     def process?(remote_file)
-      @policies.all? { |policy| policy == true }
+      @policies.all? { |policy| policy.process?(remote_file) }
+    end
+
+    def count
+      @policies.count
     end
   end
 end; end; end
