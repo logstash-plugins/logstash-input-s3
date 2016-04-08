@@ -1,5 +1,5 @@
 # encoding: utf-8
-module LogStash module Inputs module S3
+module LogStash module Inputs class S3
   # The processor represent a workers thread
   class Processor
     def initialize(event_processor, post_processors = [])

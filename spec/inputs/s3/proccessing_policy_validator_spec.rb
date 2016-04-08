@@ -86,7 +86,7 @@ module LogStash module Inputs class S3
 
     describe ProcessingPolicyValidator::SkipEmptyFile do
       context "When the file is empty" do
-        let(:s3_object) { double("remote_file", :content_length => 0) }
+        let(:s3_object) { double("remote_file", :key => "hola", :content_length => 0) }
 
         it "doesnt accept to process" do
           expect(subject.process?(remote_file)).to be_falsey
@@ -94,7 +94,7 @@ module LogStash module Inputs class S3
       end
 
       context "When the file has contents" do
-        let(:s3_object) { double("remote_file", :content_length => 100) }
+        let(:s3_object) { double("remote_file", :key => "hola", :content_length => 100) }
 
         it "accepts to process" do
           expect(subject.process?(remote_file)).to be_truthy
@@ -126,7 +126,8 @@ module LogStash module Inputs class S3
       end
     end
 
-    describe ProcessingPolicyValidator::AlreadyProcessed
+    xdescribe ProcessingPolicyValidator::AlreadyProcessed
+   # # xdescribe ProcessingPolicyValidator::SupportedFileType
 
     describe ProcessingPolicyValidator::BackupedFiles do
       subject { described_class.new(backup_prefix) }

@@ -10,9 +10,7 @@ module LogStash module Inputs class S3
     java_import java.util.concurrent.SynchronousQueue
     java_import java.util.concurrent.TimeUnit
 
-    DEFAULT_OPTIONS = {
-      :processors_count => 5
-    }
+    DEFAULT_OPTIONS = { :processors_count => 5 }
 
     TIMEOUT_MS = 150 # milliseconds, use for the SynchronousQueue
 

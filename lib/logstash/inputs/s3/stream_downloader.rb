@@ -1,6 +1,6 @@
 # encoding: utf-8
 #
-module LogStash module Inputs module S3
+module LogStash module Inputs class S3
   class StreamDownloader
     attr_reader :remote_object
 
@@ -22,8 +22,8 @@ module LogStash module Inputs module S3
       stream_to_pipe.each_line(&block)
     end
 
-    def self.fetcher
-      if compressed_gzip?
+    def self.fetcher(remote_file)
+      if remote_file.compressed_gzip?
         CompressedStreamDownloader.new(remote_object)
       else
         StreamDownloader.new(remote_object)
