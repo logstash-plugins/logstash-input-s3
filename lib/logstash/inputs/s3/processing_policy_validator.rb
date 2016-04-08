@@ -22,7 +22,7 @@ module LogStash module Inputs class S3
       end
 
       def process?(remote_file)
-        # @sincedb.newer?(remote_file.last_modified)
+        # @sincedb.processed?(remote_file)
         return true
       end
     end
