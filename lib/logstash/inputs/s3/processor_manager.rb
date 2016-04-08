@@ -46,7 +46,9 @@ module LogStash module Inputs class S3
 
     def start_processor
       loop do
-        if !stop? && remote_file = @queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
+        break if stop?
+
+        if remote_file = @queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
           @processor.handle(remote_file)
         end
       end

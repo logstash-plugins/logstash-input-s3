@@ -9,8 +9,8 @@ module LogStash module Inputs module S3
 
     def handle(remote_file)
       # Extract of metadata need to be handled in the `RemoteFile`
-      remote_file.each_line do |line, metadata|
-        emit_event(line, metadata)
+      remote_file.each_line do |line|
+        emit_event(line, remote_file.metadata)
       end
 
       post_process(remote_file)
