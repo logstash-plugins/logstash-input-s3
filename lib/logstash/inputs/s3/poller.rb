@@ -3,7 +3,7 @@ require "stud/interval"
 require "logstash/inputs/s3/remote_file"
 
 module LogStash module Inputs class S3
-  class S3Poller
+  class Poller
     DEFAULT_OPTIONS = {
       :polling_interval => 1,
       :buckets_options => {}

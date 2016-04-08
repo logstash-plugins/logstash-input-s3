@@ -1,7 +1,5 @@
 # encoding: utf-8
 require "logstash/inputs/s3/stream_downloader"
-require "logstash/inputs/s3/compressed_stream_downloader"
-
 require "forwardable"
 
 module LogStash module Inputs class S3
@@ -13,6 +11,8 @@ module LogStash module Inputs class S3
       def self.complete!
       end
     end
+
+    CONTENT_TYPE_GZIP = "application/gzip"
 
     extend Forwardable
 
@@ -39,12 +39,11 @@ module LogStash module Inputs class S3
     end
 
     def compressed_gzip?
-      # TODO: check for content type?
-      File.extname(remote_object.key)
+      remote_object.content_type == CONTENT_TYPE_GZIP
     end
 
     def fetcher
-      StreamDownloader.fetcher
+      StreamDownloader.fetcher(self)
     end
   end
 end;end;end

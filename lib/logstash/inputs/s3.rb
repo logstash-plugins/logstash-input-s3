@@ -15,9 +15,10 @@ require "stud/temporary"
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # include LogStash::PluginMixins::AwsConfig
-  require "logstash/inputs/s3/s3_poller"
-  require "logstash/inputs/s3/worker"
-  require "logstash/inputs/s3/download_policy_validator"
+  require "logstash/inputs/s3/poller"
+  require "logstash/inputs/s3/processor"
+  require "logstash/inputs/s3/processor_manager"
+  require "logstash/inputs/s3/processing_policy_validator"
 
   config_name "s3"
 
@@ -74,15 +75,42 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def register
+    # TODO: Bucket, Access validation
+    @poller = Poller.new(client.bucket[@bucket])
+    
+    # TODO: Bucket, Write validation
   end
 
   def run(queue)
+    processor = processor
+    @manager = ProcessorManager.new
+
+    @poller.run do |remote_object|
+      manager.enqueue_work(remote_object)
+    end
+  end
+
+  def stop
+    # Gracefully stop the polling of new S3 documents
+    # the manager will stop consuming events from the queue, but will block untill
+    # all the processors thread are still doing work.
+    @poller.stop
+    @manager.stop
   end
   
   private
-  def s3
+  def processor
+    Processor.new(OpenStruct.new)
   end
-  
-  def poller
+
+  def client
+    Aws::S3.new(:credentials => credentials_options)
+  end
+
+  # TODO: verify all the use cases from the mixin
+  def credentials_options
+    Aws::Credentials.new(@access_key_id,
+                         @secret_access_key,
+                         @session_token)
   end
 end
