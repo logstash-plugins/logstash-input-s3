@@ -1,7 +1,6 @@
 # Logstash Plugin
 
-[![Build
-Status](http://build-eu-00.elastic.co/view/LS%20Plugins/view/LS%20Inputs/job/logstash-plugin-input-s3-unit/badge/icon)](http://build-eu-00.elastic.co/view/LS%20Plugins/view/LS%20Inputs/job/logstash-plugin-input-s3-unit/)
+[![Travis Build Status](https://travis-ci.org/logstash-plugins/logstash-input-s3.svg)](https://travis-ci.org/logstash-plugins/logstash-input-s3)
 
 This is a plugin for [Logstash](https://github.com/elastic/logstash).
 
