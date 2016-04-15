@@ -1,12 +1,11 @@
 # encoding: utf-8
-
 module LogStash module Inputs class S3
   class ProcessingPolicyValidator
     class SkipEndingDirectory
-      ENDING_DIRECTORING_STRING = "/"
+      ENDING_DIRECTORY_STRING = "/"
 
       def process?(remote_file)
-        !remote_file.key.end_with?(ENDING_DIRECTORING_STRING)
+        !remote_file.key.end_with?(ENDING_DIRECTORY_STRING)
       end
     end
 

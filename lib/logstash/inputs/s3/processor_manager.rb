@@ -25,20 +25,24 @@ module LogStash module Inputs class S3
 
       @work_queue = java.util.concurrent.SynchronousQueue.new
 
-      @stopped = Atomic::Boolean.new(false)
+      @stopped = Concurrent::AtomicBoolean.new(false)
     end
 
     def enqueue_work(remote_file)
-      @queue.offer(obj, TIMEOUT_MS, TimeUnit::MILLISECONDS)
+      # block the main thread until we are able to enqueue the workers
+      # but allow a gracefull shutdown.
+      while !success && !stop?
+        success = @queue.offer(obj, TIMEOUT_MS, TimeUnit::MILLISECONDS)
+      end
     end
 
     def start
-      @stopped.make_true
+      # TODO set thread name here with the remote key?
       processors_count.times { |w| @available_processors << Thread.new { start_processor } }
     end
 
     def stop
-      @stopped.make_false
+      @stopped.make_true
       @available_processors.join
     end
 

@@ -7,7 +7,6 @@ require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
 require "aws-sdk"
-require "logstash/inputs/s3/patch"
 
 Aws.eager_autoload!
 # New 
@@ -18,7 +17,6 @@ Aws.eager_autoload!
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
   include LogStash::PluginMixins::AwsConfig::V2
-  # include LogStash::PluginMixins::AwsConfig
   require "logstash/inputs/s3/poller"
   require "logstash/inputs/s3/processor"
   require "logstash/inputs/s3/processor_manager"
@@ -68,17 +66,27 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
   public
+  def initialize(options = {})
+    @manager = ProcessorManager.new
+  end
+
   def register
     # TODO: Bucket, Access validation
-    @poller = Poller.new(client.bucket[@bucket])
+    @poller = Poller.new(bucket_source)
     
     # TODO: Bucket, Write validation
   end
 
   def run(queue)
-    processor = processor
-    @manager = ProcessorManager.new
-
+    @processor = Processor.new(queue)
+    # The poller get all the new files from the S3 buckets,
+    # all the actual work is done in a processor which will handle the following
+    # tasks:
+    #  - Downloading
+    #  - Uncompressing
+    #  - Reading and queue
+    #  - Bookeeping
+    #  - Backup strategy
     @poller.run do |remote_object|
       manager.enqueue_work(remote_object)
     end
@@ -87,18 +95,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def stop
     # Gracefully stop the polling of new S3 documents
     # the manager will stop consuming events from the queue, but will block untill
-    # all the processors thread are still doing work.
+    # all the processors thread are still doing work unless with force quit logstash
     @poller.stop
     @manager.stop
   end
   
   private
-  def processor
-    Processor.new(OpenStruct.new)
+  def bucket_source
+    Aws::S3::Bucket.new(:name => @bucket, :client  => client)
   end
 
   def client
-    Aws::S3.new(:credentials => credentials_options)
+    # TODO HARDCODED
+    Aws::S3::Client.new(:region => "us-east-1",
+                        :credentials => credentials_options)
   end
 
   # TODO: verify all the use cases from the mixin
