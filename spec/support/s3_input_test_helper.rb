@@ -2,6 +2,7 @@
 require "flores/random"
 require "zlib"
 require "securerandom"
+require "logstash/event"
 
 class S3InputTestHelper
   class PlainTextFile
@@ -59,7 +60,7 @@ class S3InputTestHelper
       events
     end
 
-    def generate_event(label, id)
+    def generate_event(id, label)
       "#{label} - #{id}"
     end
   end
@@ -107,26 +108,24 @@ class S3InputTestHelper
   end
 
   def setup
+    cleanup # make sure the bucket is in a clean state
     generate_files
     upload_files
   end
 
-  def teardown
+  def cleanup
     @bucket.objects.each { |key| key.delete }
   end
 
   def content
-    @files.collect { |file| file.events }.flatten
+    @files.collect do |file|
+      file.events.collect { |event_data| LogStash::Event.new({ "message" => event_data }) }
+    end.flatten
   end
 
   def upload_files
     @files.each do |file|
-      begin
-        @bucket.put_object({ :key => file.filename, :body => file.content })
-      rescue => e
-        require "pry"
-        binding.pry
-      end
+      @bucket.put_object({ :key => file.filename, :body => file.content })
     end
   end
 
