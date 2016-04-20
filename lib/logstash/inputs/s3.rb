@@ -8,6 +8,7 @@ require "stud/interval"
 require "stud/temporary"
 require "aws-sdk"
 
+
 # New 
 
 # Stream events from files from a S3 bucket.
@@ -16,10 +17,14 @@ require "aws-sdk"
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
   include LogStash::PluginMixins::AwsConfig
+
   require "logstash/inputs/s3/poller"
   require "logstash/inputs/s3/processor"
   require "logstash/inputs/s3/processor_manager"
   require "logstash/inputs/s3/processing_policy_validator"
+  require "logstash/inputs/s3/event_processor"
+  require "logstash/inputs/s3/sincedb"
+  require "logstash/inputs/s3/post_processor"
 
   config_name "s3"
 
@@ -76,18 +81,24 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def initialize(options = {})
-    @manager = ProcessorManager.new
+    super
   end
 
   def register
     # TODO: Bucket, Access validation
-    @poller = Poller.new(bucket_source)
-    
     # TODO: Bucket, Write validation
   end
 
   def run(queue)
-    @processor = Processor.new(queue)
+    @poller = Poller.new(bucket_source)
+
+    processor = Processor.new(EventProcessor.new(self, queue), post_processors)
+    @manager = ProcessorManager.new({ :processor => processor,
+                                      :processors_count => 5 })
+    @manager.start
+
+    validator = ProcessingPolicyValidator.new(*processing_policies)
+
     # The poller get all the new files from the S3 buckets,
     # all the actual work is done in a processor which will handle the following
     # tasks:
@@ -96,8 +107,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     #  - Reading and queue
     #  - Bookeeping
     #  - Backup strategy
-    @poller.run do |remote_object|
-      manager.enqueue_work(remote_object)
+    @poller.run do |remote_file|
+      @manager.enqueue_work(remote_file) if validator.process?(remote_file)
     end
   end
 
@@ -105,11 +116,28 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     # Gracefully stop the polling of new S3 documents
     # the manager will stop consuming events from the queue, but will block untill
     # all the processors thread are still doing work unless with force quit logstash
-    @poller.stop
-    @manager.stop
+    @poller.stop unless @poller.nil?
+    @manager.stop unless @manager.nil?
   end
   
   private
+  def processing_policies
+    [ProcessingPolicyValidator::AlreadyProcessed.new(sincedb)]
+  end
+
+  def sincedb
+    # Upgrade?
+    @sincedb ||= SinceDB.new
+  end
+
+  # PostProcessors are only run when everything went fine
+  # in the processing of the file.
+  def post_processors
+    # Backup Locally
+    # Backup to an another bucket
+    [PostProcessor::UpdateSinceDB.new(sincedb)]
+  end
+
   def bucket_source
     Aws::S3::Bucket.new(:name => @bucket, :client  => client)
   end

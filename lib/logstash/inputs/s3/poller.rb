@@ -1,6 +1,6 @@
 # encoding: utf-8
-require "stud/interval"
 require "logstash/inputs/s3/remote_file"
+require "stud/interval"
 
 module LogStash module Inputs class S3
   class Poller

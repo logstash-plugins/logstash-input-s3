@@ -15,14 +15,25 @@ module LogStash module Inputs class S3
       end
     end
 
+    class IgnoreOlderThan
+      SECONDS_IN_ONE_HOUR = 60 * 60
+
+      def initialize(hours)
+        @seconds = hours * SECONDS_IN_ONE_HOUR
+      end
+
+      def process?(remote_file)
+        Time.now - remote_file.last_modified > SECONDS_IN_ONE_HOUR
+      end
+    end
+
     class AlreadyProcessed
       def initialize(sincedb)
         @sincedb = sincedb
       end
 
       def process?(remote_file)
-        # @sincedb.processed?(remote_file)
-        return true
+        !@sincedb.processed?(remote_file)
       end
     end
 
