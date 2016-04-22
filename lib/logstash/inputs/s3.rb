@@ -79,22 +79,32 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  # When the S3 input discovers a file that was last modified
+  # before the specified timespan in seconds, the file is ignored.
+  # After it's discovery, if an ignored file is modified it is no
+  # longer ignored and any new data is read. The default is 24 hours.
+  config :ignore_older, :validate => :number, :default => 24 * 60 * 60
+
   public
   def initialize(options = {})
     super
+
+    @sincedb = SinceDB.new(@sincedb_path, @ignore_older)
   end
 
   def register
+    FileUtils.mkdir_p(@temporary_directory)
+
     # TODO: Bucket, Access validation
     # TODO: Bucket, Write validation
   end
 
   def run(queue)
-    @poller = Poller.new(bucket_source)
+    @poller = Poller.new(bucket_source, { :polling_interval => @interval })
 
     processor = Processor.new(EventProcessor.new(self, queue), post_processors)
     @manager = ProcessorManager.new({ :processor => processor,
-                                      :processors_count => 5 })
+                                      :processors_count => 5})
     @manager.start
 
     validator = ProcessingPolicyValidator.new(*processing_policies)
@@ -104,38 +114,47 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     # tasks:
     #  - Downloading
     #  - Uncompressing
-    #  - Reading and queue
-    #  - Bookeeping
+    #  - Reading (with metadata extraction for cloudfront)
+    #  - enqueue
     #  - Backup strategy
+    #  - Book keeping
     @poller.run do |remote_file|
+      remote_file.download_to_path = @temporary_directory
       @manager.enqueue_work(remote_file) if validator.process?(remote_file)
     end
   end
 
   def stop
     # Gracefully stop the polling of new S3 documents
-    # the manager will stop consuming events from the queue, but will block untill
-    # all the processors thread are still doing work unless with force quit logstash
+    # the manager will stop consuming events from the queue, but will block until
+    # all the processors thread are done with their work this may take some time if we are downloading large
+    # files.
     @poller.stop unless @poller.nil?
     @manager.stop unless @manager.nil?
+    @sincedb.close # Force a fsync of the database
   end
   
   private
   def processing_policies
-    [ProcessingPolicyValidator::AlreadyProcessed.new(sincedb)]
-  end
-
-  def sincedb
-    # Upgrade?
-    @sincedb ||= SinceDB.new
+    [
+      ProcessingPolicyValidator::SkipEndingDirectory,
+      ProcessingPolicyValidator::SkipEmptyFile,
+      ProcessingPolicyValidator::IgnoreOlderThan.new(@ignore_older),
+      @exclude_pattern ? ProcessingPolicyValidator::ExcludePattern.new(@exclude_pattern) : nil,
+      @backup_prefix ? ProcessingPolicyValidator::ExcludeBackupedFiles.new(@backup_prefix) : nil,
+      ProcessingPolicyValidator::AlreadyProcessed.new(@sincedb),
+    ].compact
   end
 
   # PostProcessors are only run when everything went fine
   # in the processing of the file.
   def post_processors
-    # Backup Locally
-    # Backup to an another bucket
-    [PostProcessor::UpdateSinceDB.new(sincedb)]
+    [
+      @backup_bucket ? PostProcessor::BackupToBucket.new(backup_to_bucket, backup_add_prefix) : nil,
+      @backup_dir ? PostProcessor::BackupLocally.new(backup_to_dir) : nil,
+      @delete ? PostProcessor::DeleteFromSourceBucket.new : nil,
+      PostProcessor::UpdateSinceDB.new(@sincedb) # The last step is to make sure we save our file progress
+    ].compact
   end
 
   def bucket_source
@@ -143,7 +162,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   def client
-    # TODO HARDCODED
     Aws::S3::Client.new(:region => "us-east-1",
                         :credentials => credentials_options)
   end

@@ -2,6 +2,7 @@
 require "logstash/inputs/s3"
 require_relative "../support/matcher_helpers"
 require_relative "../support/s3_input_test_helper"
+require "stud/temporary"
 require "thread"
 
 # Retrieve the credentials from the environment
@@ -10,29 +11,34 @@ require "thread"
 ACCESS_KEY_ID = ENV.delete("AWS_ACCESS_KEY_ID")
 SECRET_ACCESS_KEY = ENV.delete("AWS_SECRET_ACCESS_KEY")
 BUCKET_SOURCE = ENV.delete("AWS_LOGSTASH_TEST_BUCKET")
+BACKUP_BUCKET = "ls-ph-test"
 REGION = ENV.fetch("AWS_LOGSTASH_REGION", "us-east-1")
 
 describe "Retrieve logs from S3", :tags => [:integration] do
-  let(:queue) { [] }
+  let(:queue) { Queue.new }
 
   let(:plugin) { LogStash::Inputs::S3.new(plugin_config) }
 
   let(:plugin_config) do
-    { "bucket" => bucket_source }
+    { 
+      "bucket" => bucket_source,
+      "interval" => 1,
+      "sincedb_path" => Stud::Temporary.file.path
+    }
   end
 
   context "when credentials are defined in the config as `access_key_id` `secret_access_key`" do
     let(:access_key_id) { ACCESS_KEY_ID }
     let(:secret_access_key) { SECRET_ACCESS_KEY }
     let(:bucket_source) { BUCKET_SOURCE }
+    let(:bucket_backup) { BACKUP_BUCKET }
     let(:region) { REGION }
 
     let(:plugin_config) do
       super.merge({
         "access_key_id" => access_key_id,
         "secret_access_key" => secret_access_key,
-        "bucket" => bucket_source,
-        "region" => region
+        "region" => region,
       })
     end
 

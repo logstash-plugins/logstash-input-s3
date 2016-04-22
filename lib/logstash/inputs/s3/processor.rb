@@ -8,15 +8,17 @@ module LogStash module Inputs class S3
     end
 
     def handle(remote_file)
-      # Extract of metadata need to be handled in the `RemoteFile`
       begin
+        remote_file.download!
         remote_file.each_line do |line|
           emit_event(line, remote_file.metadata)
         end
-
         post_process(remote_file)
+      rescue Aws::S3::Errors::NoSuchKey
+        # The object was deleted below our feet, nothing we can do.
+        # This can happen in any stage of the processing or the post processing
       ensure
-        # TODO remote_file.cleanup
+        remote_file.cleanup
       end
     end
 

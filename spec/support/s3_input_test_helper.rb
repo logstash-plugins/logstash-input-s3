@@ -124,9 +124,9 @@ class S3InputTestHelper
   end
 
   def upload_files
-    @files.each do |file|
-      @bucket.put_object({ :key => file.filename, :body => file.content })
-    end
+    @files.collect do |file|
+      Concurrent::Future.execute { @bucket.put_object({ :key => file.filename, :body => file.content }) }
+    end.all? { |upload| !upload.value.nil? }
   end
 
   def generate_files
