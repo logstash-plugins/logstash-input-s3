@@ -4,26 +4,24 @@ module LogStash module Inputs class S3
     class SkipEndingDirectory
       ENDING_DIRECTORY_STRING = "/"
 
-      def process?(remote_file)
+      def self.process?(remote_file)
         !remote_file.key.end_with?(ENDING_DIRECTORY_STRING)
       end
     end
 
     class SkipEmptyFile
-      def process?(remote_file)
+      def self.process?(remote_file)
         remote_file.content_length > 0
       end
     end
 
     class IgnoreOlderThan
-      SECONDS_IN_ONE_HOUR = 60 * 60
-
-      def initialize(hours)
-        @seconds = hours * SECONDS_IN_ONE_HOUR
+      def initialize(seconds)
+        @seconds = seconds
       end
 
       def process?(remote_file)
-        Time.now - remote_file.last_modified > SECONDS_IN_ONE_HOUR
+        Time.now - remote_file.last_modified < @seconds
       end
     end
 
@@ -47,7 +45,7 @@ module LogStash module Inputs class S3
       end
     end
 
-    class BackupedFiles < ExcludePattern
+    class ExcludeBackupedFiles < ExcludePattern
       def initialize(backup_prefix)
         super(/^#{backup_prefix}/)
       end
@@ -63,6 +61,7 @@ module LogStash module Inputs class S3
     end
 
     def process?(remote_file)
+      # TODO log were we stop
       @policies.all? { |policy| policy.process?(remote_file) }
     end
 

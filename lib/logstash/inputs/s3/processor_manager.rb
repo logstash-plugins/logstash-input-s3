@@ -57,7 +57,7 @@ module LogStash module Inputs class S3
         break if stop?
 
         if remote_file = @work_queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
-          LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Working on: #{remote_file.key} size: #{remote_file.content_length}")
+          LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Working on: #{remote_file.bucket_name}/#{remote_file.key} size: #{remote_file.content_length}")
           @processor.handle(remote_file)
         end
         LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Waiting for work")
