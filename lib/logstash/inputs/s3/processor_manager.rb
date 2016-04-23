@@ -58,7 +58,13 @@ module LogStash module Inputs class S3
 
         if remote_file = @work_queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
           LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Working on: #{remote_file.bucket_name}/#{remote_file.key} size: #{remote_file.content_length}")
-          @processor.handle(remote_file)
+
+          begin    
+            @processor.handle(remote_file)
+          rescue Aws::S3::Errors::NoSuchKey
+            # This mean the file on S3 were removed under our current operation,
+            # we cannot do anything about it, the file should not be available on the next pooling
+          end
         end
         LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Waiting for work")
       end
