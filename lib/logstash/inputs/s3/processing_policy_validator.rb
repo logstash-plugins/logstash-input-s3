@@ -21,7 +21,7 @@ module LogStash module Inputs class S3
       end
 
       def process?(remote_file)
-        Time.now - remote_file.last_modified < @seconds
+        Time.now - remote_file.last_modified <= @seconds
       end
     end
 

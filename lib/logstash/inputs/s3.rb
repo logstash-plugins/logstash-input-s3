@@ -105,7 +105,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     validator = ProcessingPolicyValidator.new(*processing_policies)
 
     # Each processor is run into his own thread.
-    processor = Processor.new(validator, EventProcessor.new(self, queue), post_processors)
+    processor = Processor.new(validator, EventProcessor.new(@codec, queue), post_processors)
 
     @manager = ProcessorManager.new({ :processor => processor,
                                       :processors_count => 5})

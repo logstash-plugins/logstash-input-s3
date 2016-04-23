@@ -1,14 +1,16 @@
 # encoding: utf-8
 require "logstash/inputs/s3/processing_policy_validator"
 require "logstash/inputs/s3/remote_file"
+require "logstash/inputs/s3/sincedb"
+require "stud/temporary"
 
 module LogStash module Inputs class S3
   describe ProcessingPolicyValidator do
     let(:remote_file) { RemoteFile.new(s3_object) }
     let(:s3_object) { double("s3_object", :key => "hola", :content_length => 20, :last_modified => Time.now-60) }
 
-    let(:validator_1) { ProcessingPolicyValidator::SkipEmptyFile.new }
-    let(:validator_2) { ProcessingPolicyValidator::SkipEndingDirectory.new }
+    let(:validator_1) { ProcessingPolicyValidator::SkipEmptyFile }
+    let(:validator_2) { ProcessingPolicyValidator::SkipEndingDirectory }
 
     context "#initialize" do
       subject { described_class }
@@ -67,6 +69,8 @@ module LogStash module Inputs class S3
     end
 
     describe ProcessingPolicyValidator::SkipEndingDirectory do
+      subject { described_class }
+
       context "when the key is a directory" do
         let(:s3_object) { double("remote_file", :key => "hola/") }
 
@@ -85,6 +89,8 @@ module LogStash module Inputs class S3
     end
 
     describe ProcessingPolicyValidator::SkipEmptyFile do
+      subject { described_class }
+
       context "When the file is empty" do
         let(:s3_object) { double("remote_file", :key => "hola", :content_length => 0) }
 
@@ -96,6 +102,53 @@ module LogStash module Inputs class S3
       context "When the file has contents" do
         let(:s3_object) { double("remote_file", :key => "hola", :content_length => 100) }
 
+        it "accepts to process" do
+          expect(subject.process?(remote_file)).to be_truthy
+        end
+      end
+    end
+
+    describe ProcessingPolicyValidator::IgnoreOlderThan do
+      let(:older_than) { 3600 }
+
+      subject { described_class.new(older_than) }
+
+      context "when the file is older than the threshold" do
+        let(:s3_object) { double("remote_file", :key => "hola", :content_length => 100, :last_modified => Time.now - older_than) }
+
+        it "doesnt accept to process" do
+          expect(subject.process?(remote_file)).to be_falsey
+        end
+      end
+
+      context "when the file is newer than the threshold" do
+        let(:s3_object) { double("remote_file", :key => "hola", :content_length => 100, :last_modified => Time.now) }
+        
+        it "accepts to process" do
+          expect(subject.process?(remote_file)).to be_truthy
+        end
+      end
+    end
+
+    describe ProcessingPolicyValidator::AlreadyProcessed do
+      let(:older_than) { 3600 }
+      let(:s3_object) { double("remote_file", :etag => "1234", :bucket_name => "mon-bucket", :key => "hola", :content_length => 100, :last_modified => Time.now) }
+      let(:sincedb_path) { Stud::Temporary.file.path }
+      let(:sincedb) { LogStash::Inputs::S3::SinceDB.new(sincedb_path, older_than) }
+
+      subject { described_class.new(sincedb) }
+
+      context "when we have processed the file in the past" do
+        before do
+          sincedb.completed(remote_file)
+        end
+
+        it "doesnt accept to process" do
+          expect(subject.process?(remote_file)).to be_falsey
+        end
+      end
+
+      context "when we never processed the file" do
         it "accepts to process" do
           expect(subject.process?(remote_file)).to be_truthy
         end
@@ -126,10 +179,7 @@ module LogStash module Inputs class S3
       end
     end
 
-    xdescribe ProcessingPolicyValidator::AlreadyProcessed
-   # # xdescribe ProcessingPolicyValidator::SupportedFileType
-
-    describe ProcessingPolicyValidator::BackupedFiles do
+    describe ProcessingPolicyValidator::ExcludeBackupedFiles do
       subject { described_class.new(backup_prefix) }
 
       let(:s3_object) { double("remote_file", :key => "bonjourlafamille" ) }
@@ -151,4 +201,4 @@ module LogStash module Inputs class S3
       end
     end
   end
-end;end;end
+end; end; end
