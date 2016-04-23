@@ -102,12 +102,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def run(queue)
     @poller = Poller.new(bucket_source, { :polling_interval => @interval })
 
-    processor = Processor.new(EventProcessor.new(self, queue), post_processors)
+    validator = ProcessingPolicyValidator.new(*processing_policies)
+
+    # Each processor is run into his own thread.
+    processor = Processor.new(validator, EventProcessor.new(self, queue), post_processors)
+
     @manager = ProcessorManager.new({ :processor => processor,
                                       :processors_count => 5})
     @manager.start
 
-    validator = ProcessingPolicyValidator.new(*processing_policies)
 
     # The poller get all the new files from the S3 buckets,
     # all the actual work is done in a processor which will handle the following
@@ -120,7 +123,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     #  - Book keeping
     @poller.run do |remote_file|
       remote_file.download_to_path = @temporary_directory
-      @manager.enqueue_work(remote_file) if validator.process?(remote_file)
+      @manager.enqueue_work(remote_file) 
     end
   end
 

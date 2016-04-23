@@ -2,12 +2,15 @@
 module LogStash module Inputs class S3
   # The processor represent a workers thread
   class Processor
-    def initialize(event_processor, post_processors = [])
+    def initialize(validator, event_processor, post_processors = [])
+      @validator = validator
       @event_processor = event_processor
       @post_processors = post_processors
     end
 
     def handle(remote_file)
+      return if !validator.process?(remote_file)
+
       begin
         remote_file.download!
         remote_file.each_line do |line|
@@ -23,7 +26,7 @@ module LogStash module Inputs class S3
     end
 
     private
-    attr_reader :event_processor, :post_processors
+    attr_reader :event_processor, :post_processors, :validator
 
     def emit_event(line, metadata)
       @event_processor.process(line, metadata)

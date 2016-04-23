@@ -74,7 +74,6 @@ module LogStash module Inputs class S3
     end
 
     def load_database
-      puts @file
       return !::File.exists?(@file)
 
       ::File.open(@file).each_line do |line|
@@ -94,8 +93,8 @@ module LogStash module Inputs class S3
 
     def serialize
       @db.each do |sincedbkey, sincedbvalue| 
-        ::File.open(@file, "w") do |f|
-          f.write(LogStash::Json.dump({ "key" => sincedbkey.to_hash,
+        ::File.open(@file, "a") do |f|
+          f.puts(LogStash::Json.dump({ "key" => sincedbkey.to_hash,
                                         "value" => sincedbvalue.to_hash }))
         end
       end
