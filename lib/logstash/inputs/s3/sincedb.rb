@@ -64,7 +64,6 @@ module LogStash module Inputs class S3
 
       Thread.new do
         LogStash::Util.set_thread_name("S3 input, sincedb periodic fsync")
-
         Stud.interval(1) { periodic_sync }
       end
     end

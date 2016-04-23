@@ -14,7 +14,7 @@ BUCKET_SOURCE = ENV.delete("AWS_LOGSTASH_TEST_BUCKET")
 BACKUP_BUCKET = "ls-ph-test"
 REGION = ENV.fetch("AWS_LOGSTASH_REGION", "us-east-1")
 
-describe "Retrieve logs from S3", :tags => [:integration] do
+describe "Retrieve logs from S3", :tags => :integration do
   let(:queue) { Queue.new }
 
   let(:plugin) { LogStash::Inputs::S3.new(plugin_config) }
