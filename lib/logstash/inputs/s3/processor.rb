@@ -1,4 +1,6 @@
 # encoding: utf-8
+require "aws-sdk"
+
 module LogStash module Inputs class S3
   # The processor represent a workers thread
   class Processor
@@ -19,7 +21,10 @@ module LogStash module Inputs class S3
         post_process(remote_file)
       rescue Aws::S3::Errors::NoSuchKey
         # The object was deleted below our feet, nothing we can do.
-        # This can happen in any stage of the processing or the post processing
+        # Should be raised when we try to download the file.
+        #
+        # We just gracefully cleanup this object, Also take note that 
+        # some post procesors will also handle this error if its non fatal for them.
       ensure
         remote_file.cleanup
       end
