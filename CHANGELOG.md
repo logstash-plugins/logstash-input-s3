@@ -1,6 +1,8 @@
-# 2.0.6
+## 2.0.7
+  - Don't download the file if the length is 0 #2
+## 2.0.6
   - Depend on logstash-core-plugin-api instead of logstash-core, removing the need to mass update plugins on major releases of logstash
-# 2.0.5
+## 2.0.5
   - New dependency requirements for logstash-core for the 5.0 release
 ## 2.0.4
  - Fix for Error: No Such Key problem when deleting
