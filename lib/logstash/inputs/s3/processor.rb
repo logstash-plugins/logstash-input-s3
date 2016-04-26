@@ -13,21 +13,12 @@ module LogStash module Inputs class S3
     def handle(remote_file)
       return if !validator.process?(remote_file)
 
-      begin
-        remote_file.download!
-        remote_file.each_line do |line|
-          emit_event(line, remote_file.metadata)
-        end
-        post_process(remote_file)
-      rescue Aws::S3::Errors::NoSuchKey
-        # The object was deleted below our feet, nothing we can do.
-        # Should be raised when we try to download the file.
-        #
-        # We just gracefully cleanup this object, Also take note that 
-        # some post procesors will also handle this error if its non fatal for them.
-      ensure
-        remote_file.cleanup
+      remote_file.download!
+      remote_file.each_line do |line|
+        emit_event(line, remote_file.metadata)
       end
+      post_process(remote_file)
+      remote_file.cleanup
     end
 
     private
