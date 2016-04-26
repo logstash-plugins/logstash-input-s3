@@ -1,3 +1,6 @@
+## 3.1.10
+  - Don't download the file if the length is 0 #2
+
 ## 3.1.9
   - Change default sincedb path to live in `{path.data}/plugins/inputs/s3` instead of $HOME.
     Prior Logstash installations (using $HOME default) are automatically migrated.
