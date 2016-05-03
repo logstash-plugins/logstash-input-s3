@@ -207,8 +207,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         else
           decorate(event)
 
-          event["cloudfront_version"] = metadata[:cloudfront_version] unless metadata[:cloudfront_version].nil?
-          event["cloudfront_fields"]  = metadata[:cloudfront_fields] unless metadata[:cloudfront_fields].nil?
+          event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
+          event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
           queue << event
         end
@@ -220,8 +220,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def event_is_metadata?(event)
-    return false if event["message"].nil?
-    line = event["message"]
+    return false if event.get("message").nil?
+    line = event.get("message")
     version_metadata?(line) || fields_metadata?(line)
   end
 
@@ -237,7 +237,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private 
   def update_metadata(metadata, event)
-    line = event['message'].strip
+    line = event.get('message').strip
 
     if version_metadata?(line)
       metadata[:cloudfront_version] = line.split(/#Version: (.+)/).last

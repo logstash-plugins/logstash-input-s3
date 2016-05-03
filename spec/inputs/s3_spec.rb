@@ -299,8 +299,8 @@ describe LogStash::Inputs::S3 do
         events = fetch_events(config)
 
         events.each do |event|
-          expect(event['cloudfront_fields']).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
-          expect(event['cloudfront_version']).to eq('1.0')
+          expect(event.get('cloudfront_fields')).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
+          expect(event.get('cloudfront_version')).to eq('1.0')
         end
       end
 
