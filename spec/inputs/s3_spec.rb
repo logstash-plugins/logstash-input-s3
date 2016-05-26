@@ -52,27 +52,6 @@ describe LogStash::Inputs::S3 do
   describe '#get_s3object' do
     subject { LogStash::Inputs::S3.new(settings) }
 
-    context 'with deprecated credentials option' do
-      let(:settings) {
-        {
-          "credentials" => ["1234", "secret"],
-          "proxy_uri" => "http://example.com",
-          "bucket" => "logstash-test",
-        }
-      }
-
-      it 'should instantiate AWS::S3 clients with a proxy set' do
-        expect(AWS::S3).to receive(:new).with({
-          :access_key_id => "1234",
-          :secret_access_key => "secret",
-          :proxy_uri => 'http://example.com',
-          :use_ssl => subject.use_ssl,
-        }.merge(subject.aws_service_endpoint(subject.region)))
-
-        subject.send(:get_s3object)
-      end
-    end
-
     context 'with modern access key options' do
       let(:settings) {
         {
@@ -220,19 +199,6 @@ describe LogStash::Inputs::S3 do
 
           expect(File.exists?(backup_file)).to eq(true)
         end
-      end
-    end
-
-    it 'should accepts a list of credentials for the aws-sdk, this is deprecated' do
-      Stud::Temporary.directory do |tmp_directory|
-        old_credentials_config = {
-          "credentials" => ['1234', 'secret'],
-          "backup_to_dir" => tmp_directory,
-          "bucket" => "logstash-test"
-        }
-
-        plugin = LogStash::Inputs::S3.new(old_credentials_config)
-        expect{ plugin.register }.not_to raise_error
       end
     end
   end

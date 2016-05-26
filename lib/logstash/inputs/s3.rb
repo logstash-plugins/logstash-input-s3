@@ -18,13 +18,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   default :codec, "plain"
 
-  # DEPRECATED: The credentials of the AWS account used to access the bucket.
-  # Credentials can be specified:
-  # - As an ["id","secret"] array
-  # - As a path to a file containing AWS_ACCESS_KEY_ID=... and AWS_SECRET_ACCESS_KEY=...
-  # - In the environment, if not set (using variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-  config :credentials, :validate => :array, :default => [], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
-
   # The name of the S3 bucket.
   config :bucket, :validate => :string, :required => true
 
@@ -353,28 +346,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    # TODO: (ph) Deprecated, it will be removed
-    if @credentials.length == 1
-      File.open(@credentials[0]) { |f| f.each do |line|
-        unless (/^\#/.match(line))
-          if(/\s*=\s*/.match(line))
-            param, value = line.split('=', 2)
-            param = param.chomp().strip()
-            value = value.chomp().strip()
-            if param.eql?('AWS_ACCESS_KEY_ID')
-              @access_key_id = value
-            elsif param.eql?('AWS_SECRET_ACCESS_KEY')
-              @secret_access_key = value
-            end
-          end
-        end
-      end
-      }
-    elsif @credentials.length == 2
-      @access_key_id = @credentials[0]
-      @secret_access_key = @credentials[1]
-    end
-
     s3 = AWS::S3.new(aws_options_hash)
   end
 
