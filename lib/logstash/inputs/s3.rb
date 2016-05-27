@@ -18,20 +18,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   default :codec, "plain"
 
-  # DEPRECATED: The credentials of the AWS account used to access the bucket.
-  # Credentials can be specified:
-  # - As an ["id","secret"] array
-  # - As a path to a file containing AWS_ACCESS_KEY_ID=... and AWS_SECRET_ACCESS_KEY=...
-  # - In the environment, if not set (using variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-  config :credentials, :validate => :array, :default => [], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
-
   # The name of the S3 bucket.
   config :bucket, :validate => :string, :required => true
-
-  # The AWS region for your bucket.
-  config :region_endpoint, :validate => ["us-east-1", "us-west-1", "us-west-2",
-                                "eu-west-1", "ap-southeast-1", "ap-southeast-2",
-                                "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
 
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
@@ -72,8 +60,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     require "fileutils"
     require "digest/md5"
     require "aws-sdk"
-
-    @region = get_region
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
@@ -163,11 +149,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def aws_service_endpoint(region)
-    region_to_use = get_region
-
     return {
-      :s3_endpoint => region_to_use == 'us-east-1' ?
-        's3.amazonaws.com' : "s3-#{region_to_use}.amazonaws.com"
+      :s3_endpoint => region == 'us-east-1' ?
+        's3.amazonaws.com' : "s3-#{region}.amazonaws.com"
     }
   end
 
@@ -361,39 +345,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   private
-  def get_region
-    # TODO: (ph) Deprecated, it will be removed
-    if @region_endpoint
-      @region_endpoint
-    else
-      @region
-    end
-  end
-
-  private
   def get_s3object
-    # TODO: (ph) Deprecated, it will be removed
-    if @credentials.length == 1
-      File.open(@credentials[0]) { |f| f.each do |line|
-        unless (/^\#/.match(line))
-          if(/\s*=\s*/.match(line))
-            param, value = line.split('=', 2)
-            param = param.chomp().strip()
-            value = value.chomp().strip()
-            if param.eql?('AWS_ACCESS_KEY_ID')
-              @access_key_id = value
-            elsif param.eql?('AWS_SECRET_ACCESS_KEY')
-              @secret_access_key = value
-            end
-          end
-        end
-      end
-      }
-    elsif @credentials.length == 2
-      @access_key_id = @credentials[0]
-      @secret_access_key = @credentials[1]
-    end
-
     s3 = AWS::S3.new(aws_options_hash)
   end
 
