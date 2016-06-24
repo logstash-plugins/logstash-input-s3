@@ -3,7 +3,6 @@ require "logstash/devutils/rspec/spec_helper"
 require "logstash/inputs/s3"
 require "logstash/errors"
 require "aws-sdk-resources"
-require "stud/temporary"
 require_relative "../support/helpers"
 require "stud/temporary"
 require "aws-sdk"
@@ -53,27 +52,6 @@ describe LogStash::Inputs::S3 do
 
   describe '#get_s3object' do
     subject { LogStash::Inputs::S3.new(settings) }
-
-    context 'with deprecated credentials option' do
-      let(:settings) {
-        {
-          "credentials" => ["1234", "secret"],
-          "proxy_uri" => "http://example.com",
-          "bucket" => "logstash-test",
-        }
-      }
-
-      it 'should instantiate AWS::S3 clients with a proxy set' do
-        expect(Aws::S3::Resource).to receive(:new).with({
-          :access_key_id => "1234",
-          :secret_access_key => "secret",
-          :http_proxy => 'http://example.com',
-          :region => subject.region
-        })
-
-        subject.send(:get_s3object)
-      end
-    end
 
     context 'with modern access key options' do
       let(:settings) {
@@ -226,19 +204,6 @@ describe LogStash::Inputs::S3 do
         end
       end
     end
-
-    it 'should accepts a list of credentials for the aws-sdk, this is deprecated' do
-      Stud::Temporary.directory do |tmp_directory|
-        old_credentials_config = {
-          "credentials" => ['1234', 'secret'],
-          "backup_to_dir" => tmp_directory,
-          "bucket" => "logstash-test"
-        }
-
-        plugin = LogStash::Inputs::S3.new(old_credentials_config)
-        expect{ plugin.register }.not_to raise_error
-      end
-    end
   end
 
   shared_examples "generated events"  do
@@ -309,8 +274,8 @@ describe LogStash::Inputs::S3 do
         events = fetch_events(config)
 
         events.each do |event|
-          expect(event['cloudfront_fields']).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
-          expect(event['cloudfront_version']).to eq('1.0')
+          expect(event.get('cloudfront_fields')).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
+          expect(event.get('cloudfront_version')).to eq('1.0')
         end
       end
 

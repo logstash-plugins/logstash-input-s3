@@ -18,20 +18,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   default :codec, "plain"
 
-  # DEPRECATED: The credentials of the AWS account used to access the bucket.
-  # Credentials can be specified:
-  # - As an ["id","secret"] array
-  # - As a path to a file containing AWS_ACCESS_KEY_ID=... and AWS_SECRET_ACCESS_KEY=...
-  # - In the environment, if not set (using variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-  config :credentials, :validate => :array, :default => [], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
-
   # The name of the S3 bucket.
   config :bucket, :validate => :string, :required => true
-
-  # The AWS region for your bucket.
-  config :region_endpoint, :validate => ["us-east-1", "us-west-1", "us-west-2",
-                                "eu-west-1", "ap-southeast-1", "ap-southeast-2",
-                                "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
 
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
@@ -72,8 +60,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     require "fileutils"
     require "digest/md5"
     require "aws-sdk-resources"
-
-    @region = get_region
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
@@ -146,7 +132,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     objects = list_new_files
 
     objects.each do |key|
-
       if stop?
         break
       else
@@ -199,8 +184,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         else
           decorate(event)
 
-          event["cloudfront_version"] = metadata[:cloudfront_version] unless metadata[:cloudfront_version].nil?
-          event["cloudfront_fields"]  = metadata[:cloudfront_fields] unless metadata[:cloudfront_fields].nil?
+          event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
+          event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
           queue << event
         end
@@ -212,8 +197,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def event_is_metadata?(event)
-    return false if event["message"].nil?
-    line = event["message"]
+    return false if event.get("message").nil?
+    line = event.get("message")
     version_metadata?(line) || fields_metadata?(line)
   end
 
@@ -229,7 +214,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private 
   def update_metadata(metadata, event)
-    line = event['message'].strip
+    line = event.get('message').strip
 
     if version_metadata?(line)
       metadata[:cloudfront_version] = line.split(/#Version: (.+)/).last
@@ -351,50 +336,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   private
-  def get_region
-    # TODO: (ph) Deprecated, it will be removed
-    if @region_endpoint
-      @region_endpoint
-    else
-      @region
-    end
+  def get_s3object
+    s3 = AWS::S3.new(aws_options_hash)
   end
 
   private
-  def get_s3object
-    # TODO: (ph) Deprecated, it will be removed
-    if @credentials.length == 1
-      File.open(@credentials[0]) { |f| f.each do |line|
-        unless (/^\#/.match(line))
-          if(/\s*=\s*/.match(line))
-            param, value = line.split('=', 2)
-            param = param.chomp().strip()
-            value = value.chomp().strip()
-            if param.eql?('AWS_ACCESS_KEY_ID')
-              @access_key_id = value
-            elsif param.eql?('AWS_SECRET_ACCESS_KEY')
-              @secret_access_key = value
-            end
-          end
-        end
-      end
-      }
-    elsif @credentials.length == 2
-      @access_key_id = @credentials[0]
-      @secret_access_key = @credentials[1]
-    end
-
-    if @credentials
-      s3 = Aws::S3::Resource.new(
-        :access_key_id => @access_key_id,
-        :secret_access_key => @secret_access_key,
-        :region => @region
-      )
-    else
-      s3 = Aws::S3::Resource.new(aws_options_hash)
-    end
-  end
-
   module SinceDB
     class File
       def initialize(file)
