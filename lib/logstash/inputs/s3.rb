@@ -12,7 +12,7 @@ require "stud/temporary"
 # Each line from each file generates an event.
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
-  include LogStash::PluginMixins::AwsConfig
+  include LogStash::PluginMixins::AwsConfig::V2
 
   config_name "s3"
 
@@ -59,18 +59,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def register
     require "fileutils"
     require "digest/md5"
-    require "aws-sdk"
+    require "aws-sdk-resources"
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
 
     s3 = get_s3object
 
-    @s3bucket = s3.buckets[@bucket]
+    @s3bucket = s3.bucket(@bucket)
 
     unless @backup_to_bucket.nil?
-      @backup_bucket = s3.buckets[@backup_to_bucket]
-      unless @backup_bucket.exists?
-        s3.buckets.create(@backup_to_bucket)
+      @backup_bucket = s3.bucket(@backup_to_bucket)
+      begin
+        s3.client.head_bucket({ :bucket => @backup_to_bucket})
+      rescue Aws::S3::Errors::NoSuchBucket
+        s3.create_bucket({ :bucket => @backup_to_bucket})
       end
     end
 
@@ -79,7 +81,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
 
     FileUtils.mkdir_p(@temporary_directory) unless Dir.exist?(@temporary_directory)
-  end # def register
+  end
 
   public
   def run(queue)
@@ -93,13 +95,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def list_new_files
     objects = {}
 
-    @s3bucket.objects.with_prefix(@prefix).each do |log|
+    @s3bucket.objects(:prefix => @prefix).each do |log|
       @logger.debug("S3 input: Found key", :key => log.key)
 
       unless ignore_filename?(log.key)
         if sincedb.newer?(log.last_modified)
           objects[log.key] = log.last_modified
           @logger.debug("S3 input: Adding to objects[]", :key => log.key)
+          @logger.debug("objects[] length is: ", :length => objects.length)
         end
       end
     end
@@ -107,13 +110,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end # def fetch_new_files
 
   public
-  def backup_to_bucket(object, key)
+  def backup_to_bucket(object)
     unless @backup_to_bucket.nil?
-      backup_key = "#{@backup_add_prefix}#{key}"
+      backup_key = "#{@backup_add_prefix}#{object.key}"
+      @backup_bucket.object(backup_key).copy_from(:copy_source => "#{object.bucket_name}/#{object.key}")
       if @delete
-        object.move_to(backup_key, :bucket => @backup_bucket)
-      else
-        object.copy_to(backup_key, :bucket => @backup_bucket)
+        object.delete()
       end
     end
   end
@@ -141,18 +143,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   public
   def stop
-    # @current_thread is initialized in the `#run` method, 
-    # this variable is needed because the `#stop` is a called in another thread 
+    # @current_thread is initialized in the `#run` method,
+    # this variable is needed because the `#stop` is a called in another thread
     # than the `#run` method and requiring us to call stop! with a explicit thread.
     Stud.stop!(@current_thread)
-  end
-
-  public
-  def aws_service_endpoint(region)
-    return {
-      :s3_endpoint => region == 'us-east-1' ?
-        's3.amazonaws.com' : "s3-#{region}.amazonaws.com"
-    }
   end
 
   private
@@ -164,7 +158,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # @return [Boolean] True if the file was completely read, false otherwise.
   def process_local_log(queue, filename)
     @logger.debug('Processing file', :filename => filename)
-
     metadata = {}
     # Currently codecs operates on bytes instead of stream.
     # So all IO stuff: decompression, reading need to be done in the actual
@@ -285,6 +278,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def ignore_filename?(filename)
     if @prefix == filename
       return true
+    elsif filename.end_with?("/")
+      return true
     elsif (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
       return true
     elsif @exclude_pattern.nil?
@@ -298,14 +293,13 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def process_log(queue, key)
-    object = @s3bucket.objects[key]
+    object = @s3bucket.object(key)
 
     filename = File.join(temporary_directory, File.basename(key))
-    
     if download_remote_file(object, filename)
       if process_local_log(queue, filename)
         lastmod = object.last_modified
-        backup_to_bucket(object, key)
+        backup_to_bucket(object)
         backup_to_dir(filename)
         delete_file_from_bucket(object)
         FileUtils.remove_entry_secure(filename, true)
@@ -324,13 +318,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # @return [Boolean] True if the file was completely downloaded
   def download_remote_file(remote_object, local_filename)
     completed = false
-
     @logger.debug("S3 input: Download remote file", :remote_key => remote_object.key, :local_filename => local_filename)
     File.open(local_filename, 'wb') do |s3file|
-      remote_object.read do |chunk|
-        return completed if stop?
-        s3file.write(chunk)
-      end
+      return completed if stop?
+      remote_object.get(:response_target => s3file)
     end
     completed = true
 
@@ -346,7 +337,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    s3 = AWS::S3.new(aws_options_hash)
+    s3 = Aws::S3::Resource.new(aws_options_hash)
   end
 
   private

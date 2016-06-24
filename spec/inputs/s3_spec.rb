@@ -2,6 +2,7 @@
 require "logstash/devutils/rspec/spec_helper"
 require "logstash/inputs/s3"
 require "logstash/errors"
+require "aws-sdk-resources"
 require_relative "../support/helpers"
 require "stud/temporary"
 require "aws-sdk"
@@ -11,6 +12,7 @@ describe LogStash::Inputs::S3 do
   let(:temporary_directory) { Stud::Temporary.pathname }
   let(:sincedb_path) { Stud::Temporary.pathname }
   let(:day) { 3600 * 24 }
+  let(:creds) { Aws::Credentials.new('1234', 'secret') }
   let(:config) {
     {
       "access_key_id" => "1234",
@@ -21,9 +23,10 @@ describe LogStash::Inputs::S3 do
     }
   }
 
+
   before do
     FileUtils.mkdir_p(sincedb_path)
-    AWS.stub!
+    Aws.config[:stub_responses] = true
     Thread.abort_on_exception = true
   end
 
@@ -63,13 +66,11 @@ describe LogStash::Inputs::S3 do
       }
 
       it 'should instantiate AWS::S3 clients with a proxy set' do
-        expect(AWS::S3).to receive(:new).with({
-          :access_key_id => "1234",
-          :secret_access_key => "secret",
-          :proxy_uri => 'http://example.com',
-          :use_ssl => subject.use_ssl,
-        }.merge(subject.aws_service_endpoint(subject.region)))
-        
+        expect(Aws::S3::Resource).to receive(:new).with({
+          :credentials => kind_of(Aws::Credentials),
+          :http_proxy => 'http://example.com',
+          :region => subject.region
+        })
 
         subject.send(:get_s3object)
       end
@@ -77,7 +78,7 @@ describe LogStash::Inputs::S3 do
   end
 
   describe "#list_new_files" do
-    before { allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list } }
+    before { allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects_list } }
 
     let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
     let(:objects_list) {
@@ -107,7 +108,7 @@ describe LogStash::Inputs::S3 do
           present_object
         ]
 
-        allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects_list }
+        allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects_list }
 
         plugin = LogStash::Inputs::S3.new(config.merge({ 'backup_add_prefix' => 'mybackup',
                                                          'backup_to_bucket' => config['bucket']}))
@@ -133,7 +134,7 @@ describe LogStash::Inputs::S3 do
           present_object
         ]
 
-        allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(prefix) { objects_list }
+        allow_any_instance_of(Aws::S3::Bucket).to receive(:objects).with(:prefix => prefix) { objects_list }
 
         plugin = LogStash::Inputs::S3.new(config.merge({ 'prefix' => prefix }))
         plugin.register
@@ -147,7 +148,7 @@ describe LogStash::Inputs::S3 do
         double(:key => 'TWO_DAYS_AGO', :last_modified => Time.now - 2 * day)
       ]
 
-      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects }
+      allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects }
 
 
       plugin = LogStash::Inputs::S3.new(config)
@@ -160,20 +161,22 @@ describe LogStash::Inputs::S3 do
         plugin = LogStash::Inputs::S3.new(config.merge({ "backup_to_bucket" => "mybackup"}))
         plugin.register
 
-        s3object = double()
-        expect(s3object).to receive(:copy_to).with('test-file', :bucket => an_instance_of(AWS::S3::Bucket))
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with(:copy_source => "mybucket/testkey")
+        expect(s3object).to_not receive(:delete)
 
-        plugin.backup_to_bucket(s3object, 'test-file')
+        plugin.backup_to_bucket(s3object)
       end
 
-      it 'should move to another s3 bucket when deleting the original file' do
+      it 'should copy to another s3 bucket when deleting the original file' do
         plugin = LogStash::Inputs::S3.new(config.merge({ "backup_to_bucket" => "mybackup", "delete" => true }))
         plugin.register
 
-        s3object = double()
-        expect(s3object).to receive(:move_to).with('test-file', :bucket => an_instance_of(AWS::S3::Bucket))
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with(:copy_source => "mybucket/testkey")
+        expect(s3object).to receive(:delete)
 
-        plugin.backup_to_bucket(s3object, 'test-file')
+        plugin.backup_to_bucket(s3object)
       end
 
       it 'should add the specified prefix to the backup file' do
@@ -181,10 +184,11 @@ describe LogStash::Inputs::S3 do
                                                            "backup_add_prefix" => 'backup-' }))
         plugin.register
 
-        s3object = double()
-        expect(s3object).to receive(:copy_to).with('backup-test-file', :bucket => an_instance_of(AWS::S3::Bucket))
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with(:copy_source => "mybucket/testkey")
+        expect(s3object).to_not receive(:delete)
 
-        plugin.backup_to_bucket(s3object, 'test-file')
+        plugin.backup_to_bucket(s3object)
       end
     end
 
@@ -218,11 +222,19 @@ describe LogStash::Inputs::S3 do
   context 'when working with logs' do
     let(:objects) { [log] }
     let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
+    let(:data) { File.read(log_file) }
 
     before do
-      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:with_prefix).with(nil) { objects }
-      allow_any_instance_of(AWS::S3::ObjectCollection).to receive(:[]).with(log.key) { log }
-      expect(log).to receive(:read)  { |&block| block.call(File.read(log_file)) }
+      Aws.config[:s3] = {
+          stub_responses: {
+              get_object: { body: data }
+          }
+      }
+      allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects }
+      allow_any_instance_of(Aws::S3::Bucket).to receive(:object).with(log.key) { log }
+      expect(log).to receive(:get).with(instance_of(Hash)) do |arg|
+        File.open(arg[:response_target], 'wb') { |s3file| s3file.write(data) }
+      end
     end
 
     context "when event doesn't have a `message` field" do
