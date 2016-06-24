@@ -337,7 +337,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    s3 = AWS::S3.new(aws_options_hash)
+    s3 = Aws::S3::Resource.new(aws_options_hash)
   end
 
   private

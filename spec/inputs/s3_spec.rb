@@ -12,6 +12,7 @@ describe LogStash::Inputs::S3 do
   let(:temporary_directory) { Stud::Temporary.pathname }
   let(:sincedb_path) { Stud::Temporary.pathname }
   let(:day) { 3600 * 24 }
+  let(:creds) { Aws::Credentials.new('1234', 'secret') }
   let(:config) {
     {
       "access_key_id" => "1234",
@@ -21,6 +22,7 @@ describe LogStash::Inputs::S3 do
       "sincedb_path" => File.join(sincedb_path, ".sincedb")
     }
   }
+
 
   before do
     FileUtils.mkdir_p(sincedb_path)
@@ -65,8 +67,7 @@ describe LogStash::Inputs::S3 do
 
       it 'should instantiate AWS::S3 clients with a proxy set' do
         expect(Aws::S3::Resource).to receive(:new).with({
-          :access_key_id => "1234",
-          :secret_access_key => "secret",
+          :credentials => kind_of(Aws::Credentials),
           :http_proxy => 'http://example.com',
           :region => subject.region
         })
@@ -231,7 +232,9 @@ describe LogStash::Inputs::S3 do
       }
       allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects }
       allow_any_instance_of(Aws::S3::Bucket).to receive(:object).with(log.key) { log }
-      expect(log).to receive(:get)
+      expect(log).to receive(:get).with(instance_of(Hash)) do |arg|
+        File.open(arg[:response_target], 'wb') { |s3file| s3file.write(data) }
+      end
     end
 
     context "when event doesn't have a `message` field" do
