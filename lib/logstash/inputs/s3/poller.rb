@@ -6,11 +6,14 @@ module LogStash module Inputs class S3
   class Poller
     DEFAULT_OPTIONS = {
       :polling_interval => 1,
-      :buckets_options => {}
+      :each_line => true,
     }
 
-    def initialize(bucket, options = {})
+    def initialize(logger, bucket, sincedb, prefix = nil, options = {})
+      @logger = logger
       @bucket = bucket
+      @sincedb = sincedb
+      @prefix = prefix
       @stopped = false
       @options = DEFAULT_OPTIONS.merge(options)
     end
@@ -32,7 +35,7 @@ module LogStash module Inputs class S3
     def retrieve_objects(&block)
       remote_objects.each do |object|
         return if stop?
-        block.call(RemoteFile.new(object))
+        block.call(RemoteFile.new(@logger, object, @options[:each_line]))
       end
     end
 
@@ -41,7 +44,7 @@ module LogStash module Inputs class S3
     end
 
     def bucket_listing_options
-      { }.merge(options[:buckets_options])
+      { :prefix => @prefix }
     end
 
     def stop?

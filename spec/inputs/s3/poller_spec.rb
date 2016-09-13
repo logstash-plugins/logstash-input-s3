@@ -1,7 +1,8 @@
 # encoding: utf-8
 #
-require "logstash/inputs/s3"
-require "aws-sdk"
+require "logstash/devutils/rspec/spec_helper"
+require "logstash/inputs/s3/poller"
+require "aws-sdk-resources"
 require "ostruct"
 require "rspec/wait"
 
@@ -11,12 +12,13 @@ module LogStash module Inputs class S3
     let(:bucket_name) { "my-stuff" }
     let(:bucket) { Aws::S3::Bucket.new(:stub_responses => true, :name => bucket_name) }
     let(:objects) { [OpenStruct.new({:key => "myobject", :last_modified => Time.now-60, :body => "Nooo" })] }
+    let(:logger) { Cabin::Channel.get }
 
     before :each do
       allow(bucket).to receive(:objects).with(anything).and_return(objects)
     end
 
-    subject { described_class.new(bucket) }
+    subject { described_class.new(logger, bucket, sincedb) }
 
     it "lists the files from the remote host" do
       retrieved_objects = []

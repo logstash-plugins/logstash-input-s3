@@ -3,6 +3,7 @@ require "logstash/util"
 require "logstash/json"
 require "thread_safe"
 require "concurrent"
+require "digest/md5"
 
 module LogStash module Inputs class S3
   class SinceDB
@@ -30,12 +31,12 @@ module LogStash module Inputs class S3
       attr_reader :last_modified, :recorded_at
 
       def initialize(last_modified, recorded_at = Time.now)
-        @last_modified = last_modified
+        @last_modified = last_modified.class.name == "Time" ? last_modified : Time.at(last_modified)
         @recorded_at = recorded_at
       end
 
       def to_hash
-        [recorded_at]
+        [last_modified.to_i]
       end
 
       def older?(age)
@@ -47,10 +48,12 @@ module LogStash module Inputs class S3
       :flush_interval => 1
     }
 
-    def initialize(file, ignore_older, options = {})
-      @file = file
+    def initialize(logger, file, ignore_older, bucket = nil, prefix = nil, options = {})
+      @logger = logger
+      @file ||= ::File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
       @ignore_older = ignore_older
       @db = ThreadSafe::Hash.new
+      @options = DEFAULT_OPTIONS.merge(options) 
       load_database
 
       @need_sync = Concurrent::AtomicBoolean.new(false)
@@ -63,8 +66,8 @@ module LogStash module Inputs class S3
       @stopped.make_false
 
       Thread.new do
-        LogStash::Util.set_thread_name("S3 input, sincedb periodic fsync")
-        Stud.interval(1) { periodic_sync }
+        LogStash::Util.set_thread_name("<s3|sincedb")
+        Stud.interval(@options[:flush_interval]) { periodic_sync }
       end
     end
 
@@ -73,14 +76,16 @@ module LogStash module Inputs class S3
     end
 
     def load_database
-      return !::File.exists?(@file)
+      return if not ::File.exists?(@file)
 
       ::File.open(@file).each_line do |line|
         data = LogStash::Json.load(line)
-        @db[SinceDBValue.new(*data["key"])] = SinceDBKey.new(*data["value"])
+        @db[SinceDBKey.new(*data["key"])] = SinceDBValue.new(*data["value"])
       end
+      @logger.info('SinceDB database loaded', :count => @db.count)
+      @logger.debug('SinceDB database contents', :db => @db)
     end
-    
+   
     def processed?(remote_file)
       @db.include?(SinceDBKey.create_from_remote(remote_file))
     end
@@ -91,10 +96,10 @@ module LogStash module Inputs class S3
     end
 
     def serialize
-      @db.each do |sincedbkey, sincedbvalue| 
-        ::File.open(@file, "a") do |f|
+      ::File.open(@file, "w") do |f|
+        @db.each do |sincedbkey, sincedbvalue| 
           f.puts(LogStash::Json.dump({ "key" => sincedbkey.to_hash,
-                                        "value" => sincedbvalue.to_hash }))
+                                       "value" => sincedbvalue.to_hash }))
         end
       end
     end

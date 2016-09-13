@@ -1,10 +1,11 @@
 # encoding: utf-8
-require "aws-sdk"
+require "aws-sdk-resources"
 
 module LogStash module Inputs class S3
   # The processor represent a workers thread
   class Processor
-    def initialize(validator, event_processor, post_processors = [])
+    def initialize(logger, validator, event_processor, post_processors = [])
+      @logger = logger
       @validator = validator
       @event_processor = event_processor
       @post_processors = post_processors
@@ -14,8 +15,8 @@ module LogStash module Inputs class S3
       return if !validator.process?(remote_file)
 
       remote_file.download!
-      remote_file.each_line do |line|
-        emit_event(line, remote_file.metadata)
+      remote_file.each_line do |line,metadata|
+        emit_event(line, metadata)
       end
       post_process(remote_file)
       remote_file.cleanup

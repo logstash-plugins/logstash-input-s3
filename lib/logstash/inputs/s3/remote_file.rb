@@ -4,15 +4,6 @@ require "forwardable"
 
 module LogStash module Inputs class S3
   class RemoteFile
-    class NoKeepAlive
-      def self.notify!
-      end
-
-      def self.complete!
-      end
-    end
-
-    GZIP_EXTENSION = ".gz"
     FILE_MODE = "w+b"
 
     extend Forwardable
@@ -22,15 +13,16 @@ module LogStash module Inputs class S3
 
     def_delegators :@remote_object, :key, :content_length, :last_modified, :etag, :bucket_name
 
-    def initialize(object, keep_alive = NoKeepAlive)
+    def initialize(logger, object, each_line = true)
+      @logger = logger
       @remote_object = object
-      @keep_alive = keep_alive
+      @each_line = each_line
       @downloaded = false
       download_to_path = Dir.tmpdir
     end
 
     def download!
-      @file = StreamDownloader.fetcher(self).fetch
+      @file = StreamDownloader.get(self)
       @downloaded = true
     end
 
@@ -38,18 +30,20 @@ module LogStash module Inputs class S3
       # Lazy create FD
       @download_to ||= begin
                          FileUtils.mkdir_p(download_to_path)
-                         ::File.open(::File.join(download_to_path, key), FILE_MODE)
+                         ::File.open(::File.join(download_to_path, ::File.basename(key)), FILE_MODE)
                        end
     end
 
     def each_line(&block)
       # extract_metadata_from_file
       # seek for cloudfront metadata
-      @file.each_line do |line|
-        block.call(line, metadata)
-        @keep_alive.notify!
+      if @each_line
+        @file.each_line do |line|
+          block.call(line, metadata)
+        end
+      else
+        block.call(@file.read, metadata)
       end
-      @keep_alive.complete!
     end
 
     def download_finished?
@@ -71,13 +65,6 @@ module LogStash module Inputs class S3
         @download_to.close unless @download_to.closed?
         ::File.delete(@download_to.path)
       end
-    end
-
-    def compressed_gzip?
-      # Usually I would use the content_type to retrieve this information.
-      # but this require another call to S3 for each download which isn't really optimal.
-      # So we will use the filename to do a best guess at the content type.
-      ::File.extname(remote_object.key).downcase == GZIP_EXTENSION
     end
 
     def inspect
