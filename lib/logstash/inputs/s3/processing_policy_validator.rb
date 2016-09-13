@@ -51,7 +51,8 @@ module LogStash module Inputs class S3
       end
     end
 
-    def initialize(*policies)
+    def initialize(logger, *policies)
+      @logger = logger
       @policies = []
       add_policy(policies)
     end
@@ -61,8 +62,10 @@ module LogStash module Inputs class S3
     end
 
     def process?(remote_file)
-      # TODO log were we stop
-      @policies.all? { |policy| policy.process?(remote_file) }
+      passes = @policies.take_while { |policy| policy.process?(remote_file) }
+      failing_policy = @policies[passes.count]
+      @logger.debug("Processing policy evaluation", :failing_policy => failing_policy.class.name, :remote_file => remote_file)
+      failing_policy == nil
     end
 
     def count

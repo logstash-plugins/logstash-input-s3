@@ -1,32 +1,18 @@
 # encoding: utf-8
 #
 require "stud/temporary"
+
 module LogStash module Inputs class S3
   class StreamDownloader
-    def initialize(remote_object, writer = StringIO.new)
-      @writer = writer
-      @remote_object = remote_object
-    end
+    def self.get(remote_file)
+      remote_object = remote_file.remote_object
+      response = remote_object.get({ :response_target => remote_file.local_object.to_io })
+      remote_file.local_object.to_io.reopen(remote_file.local_object.to_io.path, 'rb')
 
-    def fetch
-      @remote_object.get({ :response_target => @writer })
-      # @writer.rewind
-      @writer
-    end
-
-    def self.fetcher(remote_file)
-      if remote_file.compressed_gzip?
-        CompressedStreamDownloader.new(remote_file.remote_object, remote_file.download_to)
-      else
-        StreamDownloader.new(remote_file.remote_object, remote_file.download_to)
+      if remote_file.force_gzip ||
+         (! response.content_encoding.nil? && response.content_encoding.downcase == "gzip")
+        remote_file.local_object = Zlib::GzipReader.new(remote_file.local_object.to_io)
       end
-    end
-  end
-
-  class CompressedStreamDownloader < StreamDownloader
-    def fetch
-      original_file = super
-      Zlib::GzipReader.new(original_file)
     end
   end
 end;end;end

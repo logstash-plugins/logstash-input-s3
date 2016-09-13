@@ -17,7 +17,8 @@ module LogStash module Inputs class S3
 
     attr_reader :processors_count
 
-    def initialize(options = {})
+    def initialize(logger, options = {})
+      @logger = logger
       options = DEFAULT_OPTIONS.merge(options)
       @processor = options[:processor]
       @processors_count = options[:processors_count]
@@ -57,7 +58,7 @@ module LogStash module Inputs class S3
         break if stop?
 
         if remote_file = @work_queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
-          LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Working on: #{remote_file.bucket_name}/#{remote_file.key} size: #{remote_file.content_length}")
+          LogStash::Util.set_thread_name("<s3|worker#{worker_id}")
 
           begin    
             @processor.handle(remote_file)
@@ -66,7 +67,7 @@ module LogStash module Inputs class S3
             # we cannot do anything about it, the file should not be available on the next pooling
           end
         end
-        LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Waiting for work")
+        LogStash::Util.set_thread_name("<s3|WORKER#{worker_id}")
       end
     end
 

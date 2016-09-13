@@ -6,7 +6,7 @@ require "time"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
-require "aws-sdk"
+require "aws-sdk-resources"
 
 
 # New 
@@ -16,7 +16,7 @@ require "aws-sdk"
 # Each line from each file generates an event.
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
-  include LogStash::PluginMixins::AwsConfig
+  include LogStash::PluginMixins::AwsConfig::V2
 
   require "logstash/inputs/s3/poller"
   require "logstash/inputs/s3/processor"
@@ -30,20 +30,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   default :codec, "plain"
 
-  # DEPRECATED: The credentials of the AWS account used to access the bucket.
-  # Credentials can be specified:
-  # - As an ["id","secret"] array
-  # - As a path to a file containing AWS_ACCESS_KEY_ID=... and AWS_SECRET_ACCESS_KEY=...
-  # - In the environment, if not set (using variables AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY)
-  config :credentials, :validate => :array, :default => [], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
-
   # The name of the S3 bucket.
   config :bucket, :validate => :string, :required => true
-
-  # The AWS region for your bucket.
-  config :region_endpoint, :validate => ["us-east-1", "us-west-1", "us-west-2",
-                                "eu-west-1", "ap-southeast-1", "ap-southeast-2",
-                                "ap-northeast-1", "sa-east-1", "us-gov-west-1"], :deprecated => "This only exists to be backwards compatible. This plugin now uses the AwsConfig from PluginMixins"
 
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
@@ -85,11 +73,32 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # longer ignored and any new data is read. The default is 24 hours.
   config :ignore_older, :validate => :number, :default => 24 * 60 * 60
 
+  # Allow disabling line processing on input files. If disabled,
+  # codecs will be fed the entire file at once, rather than
+  # using the default line-based processing method.
+  config :has_lines, :validate => :boolean, :default => true
+
+  # Force GZIP decompression even if the S3 object's Content-Encoding
+  # is not set to gzip.
+  config :force_gzip, :validate => :boolean, :default => false
+
+  # Set the number of parallel processing threads. This determines
+  # the number of files that will be downloaded and processed in parallel
+  config :processors, :validate => :number, :default => 4
+
+  # Set the depth within the top-level prefix to parallelize object polling
+  # Polling within individual prefixes is not yet parallelized, but this does
+  # at least let you 'tail' multiple subdirectories
+  config :depth, :validate => :number, :default => 0
+
+  # Prefix delimiter for depth discovery
+  config :delimiter, :validate => :string, :default => '/'
+
   public
   def initialize(options = {})
     super
 
-    @sincedb = SinceDB.new(@sincedb_path, @ignore_older)
+    @sincedb = SinceDB.new(@logger, @sincedb_path, @bucket, @prefix)
   end
 
   def register
@@ -100,15 +109,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   def run(queue)
-    @poller = Poller.new(bucket_source, { :polling_interval => @interval })
+    @poller = Poller.new(@logger, bucket_source, @sincedb, prefixes, { :polling_interval => @interval, :each_line => @has_lines, :force_gzip => @force_gzip })
 
-    validator = ProcessingPolicyValidator.new(*processing_policies)
+    validator = ProcessingPolicyValidator.new(@logger, *processing_policies)
 
     # Each processor is run into his own thread.
-    processor = Processor.new(validator, EventProcessor.new(@codec, queue), post_processors)
+    processor = Processor.new(@logger, validator, EventProcessor.new(@logger, @codec, queue, self), post_processors)
 
-    @manager = ProcessorManager.new({ :processor => processor,
-                                      :processors_count => 5})
+    @manager = ProcessorManager.new(@logger, { :processor => processor,
+                                               :processors_count => @processors})
     @manager.start
 
 
@@ -142,10 +151,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     [
       ProcessingPolicyValidator::SkipEndingDirectory,
       ProcessingPolicyValidator::SkipEmptyFile,
-      ProcessingPolicyValidator::IgnoreOlderThan.new(@ignore_older),
+      @ignore_older > 0 ? ProcessingPolicyValidator::IgnoreOlderThan.new(@ignore_older) : nil,
       @exclude_pattern ? ProcessingPolicyValidator::ExcludePattern.new(@exclude_pattern) : nil,
       @backup_prefix ? ProcessingPolicyValidator::ExcludeBackupedFiles.new(@backup_prefix) : nil,
-      ProcessingPolicyValidator::AlreadyProcessed.new(@sincedb),
+      ProcessingPolicyValidator::AlreadyProcessed.new(@sincedb), # Mark file as in process last (if it passed other policies)
     ].compact
   end
 
@@ -153,26 +162,26 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # in the processing of the file.
   def post_processors
     [
+      PostProcessor::UpdateSinceDB.new(@sincedb), # Mark file as complete first to avoid duplicate documents on unclean shutdown
       @backup_bucket ? PostProcessor::BackupToBucket.new(backup_to_bucket, backup_add_prefix) : nil,
       @backup_dir ? PostProcessor::BackupLocally.new(backup_to_dir) : nil,
       @delete ? PostProcessor::DeleteFromSourceBucket.new : nil,
-      PostProcessor::UpdateSinceDB.new(@sincedb) # The last step is to make sure we save our file progress
     ].compact
   end
 
   def bucket_source
-    Aws::S3::Bucket.new(:name => @bucket, :client  => client)
+    @s3 ||= Aws::S3::Resource.new(aws_options_hash).bucket(@bucket)
   end
 
-  def client
-    Aws::S3::Client.new(:region => "us-east-1",
-                        :credentials => credentials_options)
+  def prefixes(prefix = @prefix, depth = @depth)
+    logger.debug('Searching for common prefixes', :bucket => @bucket, :delimiter => @delimiter, :prefix => prefix, :depth => depth)
+    return [prefix] if depth == 0
+
+    object = bucket_source.client.list_objects_v2({:bucket => @bucket, :delimiter => @delimiter, :prefix => prefix})
+    return [prefix] if object.common_prefixes.count == 0
+
+    object.common_prefixes.delete_if {|p| p.prefix =~ Regexp.new(@exclude_pattern)} if @exclude_pattern
+    object.common_prefixes.map {|p| prefixes(p.prefix, depth - 1)} .flatten
   end
 
-  # TODO: verify all the use cases from the mixin
-  def credentials_options
-    Aws::Credentials.new(@access_key_id,
-                         @secret_access_key,
-                         @session_token)
-  end
 end

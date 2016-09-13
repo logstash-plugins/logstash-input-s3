@@ -3,43 +3,17 @@ require "logstash/util"
 require "logstash/json"
 require "thread_safe"
 require "concurrent"
+require "digest/md5"
 
 module LogStash module Inputs class S3
   class SinceDB
-    SinceDBKey = Struct.new(:key, :etag, :bucket_name) do
+    SinceDBEntry = Struct.new(:key, :completed) do
       def ==(other)
-        other.key == key && other.etag == etag
+        other.key == key
       end
 
       def self.create_from_remote(remote_file)
-        SinceDBKey.new(remote_file.key, remote_file.etag, remote_file.bucket_name)
-      end
-
-      def to_hash
-        [
-          key,
-          etag, 
-          bucket_name
-        ]
-      end
-
-      # TODO CHECK IF WE NEED #HASH
-    end
-
-    class SinceDBValue
-      attr_reader :last_modified, :recorded_at
-
-      def initialize(last_modified, recorded_at = Time.now)
-        @last_modified = last_modified
-        @recorded_at = recorded_at
-      end
-
-      def to_hash
-        [recorded_at]
-      end
-
-      def older?(age)
-        Time.now - last_modified >= age
+        SinceDBEntry.new(remote_file.key, false)
       end
     end
 
@@ -47,10 +21,13 @@ module LogStash module Inputs class S3
       :flush_interval => 1
     }
 
-    def initialize(file, ignore_older, options = {})
-      @file = file
-      @ignore_older = ignore_older
-      @db = ThreadSafe::Hash.new
+    def initialize(logger, file, bucket = nil, prefix = nil, options = {})
+      @logger = logger
+      @bucket = bucket
+      @prefix = prefix
+      @file ||= ::File.join(ENV["HOME"], ".sincedb-marker_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+      @db = ThreadSafe::Hash.new {|hash, key| hash[key] = ThreadSafe::Array.new }
+      @options = DEFAULT_OPTIONS.merge(options)
       load_database
 
       @need_sync = Concurrent::AtomicBoolean.new(false)
@@ -63,8 +40,8 @@ module LogStash module Inputs class S3
       @stopped.make_false
 
       Thread.new do
-        LogStash::Util.set_thread_name("S3 input, sincedb periodic fsync")
-        Stud.interval(1) { periodic_sync }
+        LogStash::Util.set_thread_name("<s3|sincedb")
+        Stud.interval(@options[:flush_interval]) { periodic_sync }
       end
     end
 
@@ -73,42 +50,71 @@ module LogStash module Inputs class S3
     end
 
     def load_database
-      return !::File.exists?(@file)
+      return if not ::File.exists?(@file)
 
       ::File.open(@file).each_line do |line|
         data = LogStash::Json.load(line)
-        @db[SinceDBValue.new(*data["key"])] = SinceDBKey.new(*data["value"])
+        @db[data[0]].push(SinceDBEntry.new(data[1], data[2])) if data.count == 3
       end
+      @logger.info('SinceDB database loaded', :count => @db.values.flatten.count)
+      @logger.debug('SinceDB database contents', :db => @db)
     end
-    
+   
+    def marker(prefix)
+      first_completed = @db[prefix].take_while {|entry| entry.completed} .first
+      @logger.info('SinceDB Object Marker', :prefix => prefix, :entry => first_completed)
+      first_completed.key if first_completed
+    end
+ 
     def processed?(remote_file)
-      @db.include?(SinceDBKey.create_from_remote(remote_file))
+      # Need to do the find/return within a block to hold the array lock
+      # looking up an index and then operating on it releases the lock
+      # between steps, and can result in the contents changing unexpectedly
+      entry = SinceDBEntry.create_from_remote(remote_file)
+      prefix = remote_file.prefix
+      @db[prefix].each do |e|
+        return e.completed if e == entry
+      end
+
+      @db[prefix].push(entry)
+      request_sync
+      false
     end
 
     def completed(remote_file)
-      @db[SinceDBKey.create_from_remote(remote_file)] = SinceDBValue.new(remote_file.last_modified)
+      # Same concern as above - need to find and operate on entry in one operation
+      entry = SinceDBEntry.create_from_remote(remote_file)
+      prefix = remote_file.prefix
+      @db[prefix].map! do |e|
+        e.completed = true if e == entry
+        e
+      end
       request_sync
     end
 
     def serialize
-      @db.each do |sincedbkey, sincedbvalue| 
-        ::File.open(@file, "a") do |f|
-          f.puts(LogStash::Json.dump({ "key" => sincedbkey.to_hash,
-                                        "value" => sincedbvalue.to_hash }))
+      ::File.open(@file, "w") do |f|
+        @db.each_key do |prefix|
+          @db[prefix].each do |entry|
+            f.puts(LogStash::Json.dump([prefix, entry.key, entry.completed]))
+          end
         end
       end
     end
 
     def clean_old_keys
-      @db.each do |sincedbkey, sincedbvalue|
-        @db.delete(sincedbkey) if sincedbvalue.older?(@ignore_older)
+      # This should be safe to do two-step, since other threads can only append items
+      # to the array, and we are operating on the begining.
+      @db.each_key do |prefix|
+        next if @db[prefix].count <= 1
+        completed_count = @db[prefix].take_while {|e| e.completed} .count
+        @db[prefix].slice!(0, completed_count - 1)
       end
     end
 
     def periodic_sync
-      clean_old_keys
-
       if need_sync?
+        clean_old_keys
         serialize
         @need_sync.make_false
       end

@@ -6,13 +6,18 @@ module LogStash module Inputs class S3
   class Poller
     DEFAULT_OPTIONS = {
       :polling_interval => 1,
-      :buckets_options => {}
+      :each_line => true,
+      :force_gzip => false,
     }
 
-    def initialize(bucket, options = {})
+    def initialize(logger, bucket, sincedb, prefixes = [], options = {})
+      @logger = logger
       @bucket = bucket
+      @sincedb = sincedb
+      @prefixes = prefixes
       @stopped = false
       @options = DEFAULT_OPTIONS.merge(options)
+      @logger.info('Poller watching S3', :bucket => @bucket, :prefixes => @prefixes)
     end
 
     def run(&block)
@@ -30,18 +35,16 @@ module LogStash module Inputs class S3
     attr_reader :options
 
     def retrieve_objects(&block)
-      remote_objects.each do |object|
-        return if stop?
-        block.call(RemoteFile.new(object))
+      @prefixes.each do |prefix|
+        remote_objects(prefix).each do |object|
+          return if stop?
+          block.call(RemoteFile.new(@logger, object, prefix, @options[:each_line], @options[:force_gzip]))
+        end
       end
     end
 
-    def remote_objects
-      @bucket.objects(bucket_listing_options)
-    end
-
-    def bucket_listing_options
-      { }.merge(options[:buckets_options])
+    def remote_objects(prefix)
+      @bucket.objects({ :prefix => prefix, :marker => @sincedb.marker(prefix) })
     end
 
     def stop?

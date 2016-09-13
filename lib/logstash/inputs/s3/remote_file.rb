@@ -4,52 +4,89 @@ require "forwardable"
 
 module LogStash module Inputs class S3
   class RemoteFile
-    class NoKeepAlive
-      def self.notify!
-      end
-
-      def self.complete!
-      end
-    end
-
-    GZIP_EXTENSION = ".gz"
-    FILE_MODE = "w+b"
-
     extend Forwardable
 
-    attr_reader :remote_object, :metadata, :file
-    attr_accessor :download_to_path
+    attr_reader :remote_object, :metadata, :force_gzip
+    attr_accessor :download_to_path, :prefix
 
     def_delegators :@remote_object, :key, :content_length, :last_modified, :etag, :bucket_name
 
-    def initialize(object, keep_alive = NoKeepAlive)
+    def initialize(logger, object, prefix, each_line = true, force_gzip = false )
+      @logger = logger
       @remote_object = object
-      @keep_alive = keep_alive
+      @prefix = prefix
+      @each_line = each_line
+      @force_gzip = force_gzip
       @downloaded = false
       download_to_path = Dir.tmpdir
     end
 
     def download!
-      @file = StreamDownloader.fetcher(self).fetch
-      @downloaded = true
+      retries = 0
+      begin
+        StreamDownloader.get(self)
+        @downloaded = true
+      rescue StandardError => error
+        if retries < 5
+          @logger.error("StreamDownloader failed, retrying", :object => @remote_object, :error => error, :retries => retries)
+          cleanup
+          Java::JavaLang::Thread::sleep(2 ** retries * 1000)
+          retries += 1
+          retry
+        else
+          @logger.error("StreamDownloader failed, max retries exceeded", :object => @remote_object, :error => error, :retries => retries)
+        end
+      end
+      @downloaded
     end
 
-    def download_to
+    def local_object
       # Lazy create FD
-      @download_to ||= begin
-                         FileUtils.mkdir_p(download_to_path)
-                         ::File.open(::File.join(download_to_path, key), FILE_MODE)
-                       end
+      @local_object ||= begin
+        FileUtils.mkdir_p(download_to_path)
+        ::File.open(::File.join(download_to_path, ::File.basename(key)), 'wb+')
+      end
+    end
+
+    def local_object=(file)
+      @local_object = file
     end
 
     def each_line(&block)
-      # extract_metadata_from_file
-      # seek for cloudfront metadata
-      @file.each_line do |line|
-        block.call(line, metadata)
-        @keep_alive.notify!
+      return if not download_finished?
+
+      if @local_object.is_a? Zlib::GzipReader
+        chunk_count = 0
+        loop do
+          begin
+            internal_each_line(@local_object, &block)
+            break if @local_object.unused.nil?
+            chunk_count += 1
+            file = @local_object.finish
+            file.pos -= @local_object.unused.length
+            @local_object = Zlib::GzipReader.new(file)
+          rescue Zlib::GzipFile::Error => error
+            @logger.warn("Error processing GZIP chunk",
+                         :remote_object => @remote_object,
+                         :local_object => @local_object.to_io,
+                         :chunk_count => chunk_count,
+                         :error => error)
+            break
+          end
+        end
+      else
+        internal_each_line(@local_object, &block)
       end
-      @keep_alive.complete!
+    end
+
+    def internal_each_line(file_part, &block)
+      if @each_line
+        file_part.each_line do |line|
+          block.call(line, metadata)
+        end
+      else
+        block.call(file_part.read, metadata)
+      end
     end
 
     def download_finished?
@@ -67,21 +104,16 @@ module LogStash module Inputs class S3
     end
 
     def cleanup
-      if @download_to
-        @download_to.close unless @download_to.closed?
-        ::File.delete(@download_to.path)
+      if @local_object
+        @local_object.close unless @local_object.closed?
+        ::File.delete(@local_object.path)
+        @local_object = nil
       end
-    end
-
-    def compressed_gzip?
-      # Usually I would use the content_type to retrieve this information.
-      # but this require another call to S3 for each download which isn't really optimal.
-      # So we will use the filename to do a best guess at the content type.
-      ::File.extname(remote_object.key).downcase == GZIP_EXTENSION
+    rescue Errno::ENOENT
     end
 
     def inspect
-      "RemoteFile,##{object_id}: remote_object: #{remote_object.key}"
+      "RemoteFile,##{object_id}: remote_object: s3://#{remote_object.bucket_name}/#{remote_object.key}  download_to_path: #{download_to_path}"
     end
     alias_method :to_s, :inspect
   end
