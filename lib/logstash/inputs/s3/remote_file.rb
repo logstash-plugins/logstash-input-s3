@@ -60,10 +60,11 @@ module LogStash module Inputs class S3
         loop do
           begin
             internal_each_line(@local_object, &block)
-            break if @local_object.unused.nil?
-            chunk_count += 1
+            unused = @local_object.unused.nil? ? 0 : @local_object.unused.length
             file = @local_object.finish
-            file.pos -= @local_object.unused.length
+            file.pos -= unused
+            chunk_count += 1
+            break if file.eof?
             @local_object = Zlib::GzipReader.new(file)
           rescue Zlib::GzipFile::Error => error
             @logger.warn("Error processing GZIP chunk",
