@@ -10,7 +10,7 @@ module LogStash module Inputs class S3
       remote_file.local_object.to_io.reopen(remote_file.local_object.to_io.path, 'rb')
 
       if remote_file.force_gzip ||
-         (! response.content_encoding.nil? && response.content_encoding.downcase == "gzip")
+         (response.content_encoding && response.content_encoding.downcase == "gzip")
         remote_file.local_object = Zlib::GzipReader.new(remote_file.local_object.to_io)
       end
     end

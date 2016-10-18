@@ -21,11 +21,11 @@ module LogStash module Inputs class S3
       :flush_interval => 1
     }
 
-    def initialize(logger, file, bucket = nil, prefix = nil, options = {})
+    def initialize(logger, file = nil, bucket = nil, prefix = nil, options = {})
       @logger = logger
       @bucket = bucket
       @prefix = prefix
-      @file ||= ::File.join(ENV["HOME"], ".sincedb-marker_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+      @file = file || ::File.join(ENV["HOME"], ".sincedb-marker_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
       @db = ThreadSafe::Hash.new {|hash, key| hash[key] = ThreadSafe::Array.new }
       @options = DEFAULT_OPTIONS.merge(options)
       load_database
@@ -50,14 +50,12 @@ module LogStash module Inputs class S3
     end
 
     def load_database
-      return if not ::File.exists?(@file)
-
-      ::File.open(@file).each_line do |line|
+      @file_io = ::File.open(@file, 'ab+')
+      @file_io.each_line do |line|
         data = LogStash::Json.load(line)
         @db[data[0]].push(SinceDBEntry.new(data[1], data[2])) if data.count == 3
       end
-      @logger.info('SinceDB database loaded', :count => @db.values.flatten.count)
-      @logger.debug('SinceDB database contents', :db => @db)
+      @logger.info('SinceDB database loaded', :file => @file, :count => @db.values.flatten.count)
     end
    
     def marker(prefix)
@@ -93,13 +91,14 @@ module LogStash module Inputs class S3
     end
 
     def serialize
-      ::File.open(@file, "w") do |f|
-        @db.each_key do |prefix|
-          @db[prefix].each do |entry|
-            f.puts(LogStash::Json.dump([prefix, entry.key, entry.completed]))
-          end
+      @file_io.rewind
+      @file_io.truncate(0)
+      @db.each_key do |prefix|
+        @db[prefix].each do |entry|
+          @file_io.puts(LogStash::Json.dump([prefix, entry.key, entry.completed]))
         end
       end
+      @file_io.fsync
     end
 
     def clean_old_keys
@@ -113,6 +112,7 @@ module LogStash module Inputs class S3
     end
 
     def periodic_sync
+      return if stop?
       if need_sync?
         clean_old_keys
         serialize
@@ -124,6 +124,9 @@ module LogStash module Inputs class S3
       @stopped.make_true
       clean_old_keys
       serialize
+      if not @file_io.nil?
+        @file_io.close
+      end
     end
 
     def need_sync?

@@ -27,7 +27,7 @@ module LogStash module Inputs class S3
         StreamDownloader.get(self)
         @downloaded = true
       rescue StandardError => error
-        if retries < 5
+        if retries < 8
           @logger.error("StreamDownloader failed, retrying", :object => @remote_object, :error => error, :retries => retries)
           cleanup
           Java::JavaLang::Thread::sleep(2 ** retries * 1000)
@@ -106,11 +106,12 @@ module LogStash module Inputs class S3
 
     def cleanup
       if @local_object
-        @local_object.close unless @local_object.closed?
-        ::File.delete(@local_object.path)
-        @local_object = nil
+        @local_object.to_io.close unless @local_object.to_io.closed?
+        ::File.delete(@local_object.to_io.path)
       end
-    rescue Errno::ENOENT
+    rescue Errno::ENOENT, Errno::EBADF
+    ensure
+      @local_object = nil
     end
 
     def inspect
