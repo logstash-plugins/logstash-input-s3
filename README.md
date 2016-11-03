@@ -17,6 +17,7 @@ permissions applied to the AWS IAM Policy being used:
 You might also need `s3:DeleteObject` when setting S3 input to delete on read.
 And the `s3:CreateBucket` permission to create a backup bucket unless already
 exists.
+In addition, when `backup_to_bucket` is used, the `s3:PutObject` action is also required.
 
 For buckets that have versioning enabled, you might need to add additional
 permissions.
