@@ -212,7 +212,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -227,7 +227,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -242,13 +242,26 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_gzip_file(filename, block)
-    begin
-      Zlib::GzipReader.open(filename) do |decoder|
-        decoder.each_line { |line| block.call(line) }
+    pos = 0
+    file_size = File.size(filename)
+
+    while pos != file_size do
+      File.open(filename) do |file|
+        file.pos = pos
+        unused_value = 0
+        begin
+          gzip_reader = Zlib::GzipReader.new(file)
+          gzip_reader.each_line { |line| block.call(line) }
+
+          unused = gzip_reader.unused
+          unused_value = unused.length if unused
+          pos = file.pos - unused_value
+          gzip_reader.close # also closes file
+        rescue Zlib::Error, Zlib::GzipFile::Error => e
+          @logger.error("Gzip codec: Cannot uncompress the gzip file", :filename => filename)
+          return
+        end
       end
-    rescue Zlib::Error, Zlib::GzipFile::Error => e
-      @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
-      raise e
     end
   end
 
@@ -256,9 +269,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
