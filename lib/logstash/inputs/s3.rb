@@ -259,7 +259,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           gzip_reader.close # also closes file
         rescue Zlib::Error, Zlib::GzipFile::Error => e
           @logger.error("Gzip codec: Cannot uncompress the gzip file", :filename => filename)
-          raise e
+          return
         end
       end
     end
