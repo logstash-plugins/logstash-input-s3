@@ -242,6 +242,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_gzip_file(filename, block)
+    # According to RFC 1952, Gzip file can consist of multiple members
+    # Zlib::GzipReader.each_line reads only first member
+    # That's why we re-open the file and seek to the starting point of the next member
     pos = 0
     file_size = File.size(filename)
 
@@ -256,7 +259,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           unused = gzip_reader.unused
           unused_value = unused.length if unused
           pos = file.pos - unused_value
-          gzip_reader.close # also closes file
+
+          gzip_reader.close # also closes the file
         rescue Zlib::Error, Zlib::GzipFile::Error => e
           @logger.error("Gzip codec: Cannot uncompress the gzip file", :filename => filename)
           return
