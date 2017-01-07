@@ -8,11 +8,6 @@ require "stud/interval"
 require "stud/temporary"
 require "aws-sdk-resources"
 
-# Fix for https://github.com/jruby/jruby/issues/3645
-module Aws;
-  const_set(:S3, Aws::S3);
-end
-
 # Stream events from files from a S3 bucket.
 #
 # Each line from each file generates an event.

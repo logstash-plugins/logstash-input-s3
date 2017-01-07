@@ -1,9 +1,11 @@
 # encoding: utf-8
+require "logstash/settings"
 require "logstash/util"
 require "logstash/json"
 require "thread_safe"
 require "concurrent"
 require "digest/md5"
+require "fileutils"
 
 module LogStash module Inputs class S3
   class SinceDB
@@ -25,7 +27,9 @@ module LogStash module Inputs class S3
       @logger = logger
       @bucket = bucket
       @prefix = prefix
-      @file = file || ::File.join(ENV["HOME"], ".sincedb-marker_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+      datadir = ::File.join(LogStash::SETTINGS.get('path.data'), 'plugins', 's3-input')
+      FileUtils::mkdir_p(datadir)
+      @file = file || ::File.join(datadir, "sincedb-marker_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
       @db = ThreadSafe::Hash.new {|hash, key| hash[key] = ThreadSafe::Array.new }
       @options = DEFAULT_OPTIONS.merge(options)
       load_database
