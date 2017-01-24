@@ -208,9 +208,11 @@ describe LogStash::Inputs::S3 do
   end
 
   shared_examples "generated events"  do
+    let(:events_to_process) { 2 }
+
     it 'should process events' do
       events = fetch_events(config)
-      expect(events.size).to eq(2)
+      expect(events.size).to eq(events_to_process)
     end
 
     it "deletes the temporary file" do
@@ -249,6 +251,15 @@ describe LogStash::Inputs::S3 do
       }
 
       include_examples "generated events"
+    end
+
+    context "multiple compressed streams" do
+      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'multiple_compressed_streams.gz') }
+
+      include_examples "generated events" do
+        let(:events_to_process) { 16 }
+      end
     end
 
     context 'compressed' do
