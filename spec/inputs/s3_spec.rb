@@ -255,7 +255,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context "multiple compressed streams" do
-      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day }
+      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'multiple_compressed_streams.gz') }
 
       include_examples "generated events" do
