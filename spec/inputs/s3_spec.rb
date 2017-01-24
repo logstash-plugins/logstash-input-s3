@@ -208,10 +208,12 @@ describe LogStash::Inputs::S3 do
   end
 
   shared_examples "generated events"  do
+    let(:events_to_process) { 2 }
+
     it 'should process events' do
       events = fetch_events(config)
-      expect(events.size).to eq(2)
-      insist { events[0].get("[@metadata][s3]") } == {"key" => log.key}
+      expect(events.size).to eq(events_to_process)
+      insist { events[0].get("[@metadata][s3]") } == {"key" => log.key
     end
 
     it "deletes the temporary file" do

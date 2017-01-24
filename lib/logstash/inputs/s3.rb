@@ -6,7 +6,10 @@ require "time"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
+require "aws-sdk"
+require "logstash/inputs/s3/patch"
 
+Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
 #
 # Each line from each file generates an event.
@@ -244,14 +247,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_gzip_file(filename, block)
-    begin
-      Zlib::GzipReader.open(filename) do |decoder|
-        decoder.each_line { |line| block.call(line) }
+    # Details about multiple streams and the usage of unused from: http://code.activestate.com/lists/ruby-talk/11168/
+    File.open(filename) do |zio|
+      while true do
+        io = Zlib::GzipReader.new(zio)
+        io.each_line { |line| block.call(line) }
+        unused = io.unused
+        io.finish
+        break if unused.nil?
+        zio.pos -= unused.length # reset the position to the other block in the stream
       end
-    rescue Zlib::Error, Zlib::GzipFile::Error => e
-      @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
-      raise e
     end
+  rescue Zlib::Error, Zlib::GzipFile::Error => e
+    @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
+    raise e
   end
 
   private
