@@ -6,7 +6,10 @@ require "time"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
+require "aws-sdk"
+require "logstash/inputs/s3/patch"
 
+Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
 #
 # Each line from each file generates an event.
