@@ -7,4 +7,6 @@ rvm:
 script:
 - bundle exec rspec spec
 jdk: oraclejdk8
-before_install: []
+before_install:
+ - rvm @global do gem uninstall bundler --all --ignore-dependencies —executables
+ - rvm @global do gem install bundler -v '1.13.7'
