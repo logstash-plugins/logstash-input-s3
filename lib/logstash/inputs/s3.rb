@@ -57,6 +57,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Set the directory where logstash will store the tmp files before processing them.
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
+  
+  # Set the endpoint to use a different S3 compatible object store than Amazon
+  config :endpoint, :validate => :string, :default => nil
+  
+  # Define if the SSL certificate of the object store must be checked
+  # default is true
+  config :ssl_verify_peer, :validate => :boolean, :default => true
+
 
   public
   def register
@@ -346,7 +354,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    s3 = Aws::S3::Resource.new(aws_options_hash)
+    opts = aws_options_hash
+    unless @endpoint.nil?
+      opts[:endpoint] = @endpoint
+      opts[:force_path_style] = true
+    end
+    opts[:ssl_verify_peer] = @ssl_verify_peer
+    s3 = Aws::S3::Resource.new(opts)
+
   end
 
   private
