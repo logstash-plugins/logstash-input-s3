@@ -159,7 +159,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # @param [Queue] Where to push the event
   # @param [String] Which file to read from
   # @return [Boolean] True if the file was completely read, false otherwise.
-  def process_local_log(queue, filename)
+  def process_local_log(queue, filename, key)
     @logger.debug('Processing file', :filename => filename)
     metadata = {}
     # Currently codecs operates on bytes instead of stream.
@@ -189,6 +189,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
           event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
           event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
+          event.set("key", metadata[:key]) unless metadata[:key].nil?
 
           queue << event
         end
@@ -215,7 +216,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -230,7 +231,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -265,9 +266,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
@@ -306,7 +307,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     filename = File.join(temporary_directory, File.basename(key))
     if download_remote_file(object, filename)
-      if process_local_log(queue, filename)
+      if process_local_log(queue, filename, key)
         lastmod = object.last_modified
         backup_to_bucket(object)
         backup_to_dir(filename)
