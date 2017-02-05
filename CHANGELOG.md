@@ -1,3 +1,8 @@
+## 3.1.2
+ - Fix an issue when the remote file contains multiple blob of gz in the same file #101
+ - Make the integration suite run
+ - Remove uneeded development dependency
+
 ## 3.1.1
   - Relax constraint on logstash-core-plugin-api to >= 1.60 <= 2.99
 
