@@ -1,3 +1,6 @@
+## 3.1.3
+ - The plugin will now include the s3 key in the metadata #105
+
 ## 3.1.2
  - Fix an issue when the remote file contains multiple blob of gz in the same file #101
  - Make the integration suite run
