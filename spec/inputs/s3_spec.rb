@@ -213,6 +213,7 @@ describe LogStash::Inputs::S3 do
     it 'should process events' do
       events = fetch_events(config)
       expect(events.size).to eq(events_to_process)
+      insist { events[0].get("[@metadata][s3]") } == {"key" => log.key }
     end
 
     it "deletes the temporary file" do
@@ -261,7 +262,7 @@ describe LogStash::Inputs::S3 do
         let(:events_to_process) { 16 }
       end
     end
-
+      
     context 'compressed' do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }
