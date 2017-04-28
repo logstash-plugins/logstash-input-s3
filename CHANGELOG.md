@@ -1,3 +1,6 @@
+## 3.1.4
+ - Avoid parsing non string elements #109
+
 ## 3.1.3
  - The plugin will now include the s3 key in the metadata #105
 
