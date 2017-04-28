@@ -202,7 +202,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def event_is_metadata?(event)
-    return false if event.get("message").nil?
+    return false unless event.get("message").class == String
     line = event.get("message")
     version_metadata?(line) || fields_metadata?(line)
   end
