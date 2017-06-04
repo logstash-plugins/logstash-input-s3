@@ -166,7 +166,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     # Currently codecs operates on bytes instead of stream.
     # So all IO stuff: decompression, reading need to be done in the actual
     # input and send as bytes to the codecs.
-    read_file(filename) do |line|
+    read_file(filename) do |line, extra_metadata=nil|
       if stop?
         @logger.warn("Logstash S3 input, stop reading in the middle of the file, we will read it again when logstash is started")
         return false
@@ -192,6 +192,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
           event.set("[@metadata][s3]", { "key" => key })
+          event.set("[@metadata][extra]", extra_metadata) unless extra_metadata.nil?
 
           queue << event
         end
@@ -270,7 +271,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     Zip::File.open(filename) do |zip_file|
       # Handle entries one by one
       zip_file.each do |entry|
-        entry.get_input_stream.each(&block)
+        entry.get_input_stream.each { |line| block.call(line, {"zip_entry_filename" => entry.name}) }
       end
     end
   rescue Zip::Error => e

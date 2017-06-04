@@ -291,6 +291,15 @@ describe LogStash::Inputs::S3 do
       include_examples "generated events" do
         let(:events_to_process) { 4 }
       end
+
+      it 'should extract metadata from zip file' do
+        events = fetch_events(config)
+
+        events.each do |event|
+          expect(event.get('[@metadata][extra][zip_entry_filename]')).to match(/test[1-9]*.log/)
+        end
+      end
+
     end
 
     context 'plain text' do
