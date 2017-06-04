@@ -284,6 +284,15 @@ describe LogStash::Inputs::S3 do
       include_examples "generated events"
     end
 
+    context 'zip compressed' do
+      let(:log) { double(:key => 'log.zip', :last_modified => Time.now - 2 * day) }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.zip') }
+
+      include_examples "generated events" do
+        let(:events_to_process) { 4 }
+      end
+    end
+
     context 'plain text' do
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
 

@@ -8,6 +8,7 @@ require "stud/interval"
 require "stud/temporary"
 require "aws-sdk"
 require "logstash/inputs/s3/patch"
+require 'zip'
 
 Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
@@ -234,6 +235,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def read_file(filename, &block)
     if gzip?(filename) 
       read_gzip_file(filename, block)
+    elsif zip?(filename)
+      read_zip_file(filename, block)
     else
       read_plain_file(filename, block)
     end
@@ -263,11 +266,27 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     raise e
   end
 
+  def read_zip_file(filename, block)
+    Zip::File.open(filename) do |zip_file|
+      # Handle entries one by one
+      zip_file.each do |entry|
+        entry.get_input_stream.each(&block)
+      end
+    end
+  rescue Zip::Error => e
+    @logger.error("Zip codec: We cannot uncompress the zip file", :filename => filename)
+    raise e
+  end
+
   private
   def gzip?(filename)
     filename.end_with?('.gz')
   end
-  
+
+  def zip?(filename)
+    filename.end_with?('.zip')
+  end
+
   private
   def sincedb 
     @sincedb ||= if @sincedb_path.nil?
