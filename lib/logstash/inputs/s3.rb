@@ -269,7 +269,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   private
-  def sincedb
+  def sincedb 
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
