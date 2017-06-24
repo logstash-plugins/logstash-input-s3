@@ -265,7 +265,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def gzip?(filename)
-    filename.end_with?('.gz')
+    filename.end_with?('.gz') || filename.end_with?('.gzip') 
   end
   
   private
