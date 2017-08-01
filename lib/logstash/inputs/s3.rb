@@ -58,7 +58,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  config :endpoint, :validate => :string, :default => nil
+
   public
+
   def register
     require "fileutils"
     require "digest/md5"
@@ -348,7 +351,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    s3 = Aws::S3::Resource.new(aws_options_hash)
+    s3 = Aws::S3::Resource.new(resource_options)
+  end
+
+  private
+  def resource_options
+    options = aws_options_hash
+    options.merge!(endpoint: endpoint) if endpoint
+    options
   end
 
   private
