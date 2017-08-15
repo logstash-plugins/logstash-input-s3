@@ -1,3 +1,6 @@
+## 3.1.6
+  - Fix some documentation issues
+
 ## 3.1.4
  - Avoid parsing non string elements #109
 
