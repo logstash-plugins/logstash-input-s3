@@ -6,3 +6,5 @@ coverage/
 .idea/*
 .ruby-version
 .github/
+.gradle/
+.rakeTasks

@@ -1,3 +1,6 @@
+## 3.1.7
+  - Fix missing last multi-line entry #120
+
 ## 3.1.6
   - Fix some documentation issues
 

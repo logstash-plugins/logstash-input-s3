@@ -196,6 +196,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         end
       end
     end
+    # #ensure any stateful codecs (such as multi-line ) are flushed to the queue
+    @codec.flush do |event|
+      queue << event
+    end
 
     return true
   end # def process_local_log
