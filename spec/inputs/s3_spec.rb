@@ -1,6 +1,7 @@
 # encoding: utf-8
 require "logstash/devutils/rspec/spec_helper"
 require "logstash/inputs/s3"
+require "logstash/codecs/multiline"
 require "logstash/errors"
 require "aws-sdk-resources"
 require_relative "../support/helpers"
@@ -286,6 +287,20 @@ describe LogStash::Inputs::S3 do
 
     context 'plain text' do
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
+
+      include_examples "generated events"
+    end
+
+    context 'multi-line' do
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'multiline.log') }
+       let(:config) {
+           {
+              "access_key_id" => "1234",
+              "secret_access_key" => "secret",
+              "bucket" => "logstash-test",
+              "codec" => LogStash::Codecs::Multiline.new( {"pattern" => "__SEPARATOR__", "negate" => "true",  "what" => "previous"})
+           }
+        }
 
       include_examples "generated events"
     end
