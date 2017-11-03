@@ -1,7 +1,6 @@
 # Logstash Plugin
 
-[![Build
-Status](http://build-eu-00.elastic.co/view/LS%20Plugins/view/LS%20Inputs/job/logstash-plugin-input-s3-unit/badge/icon)](http://build-eu-00.elastic.co/view/LS%20Plugins/view/LS%20Inputs/job/logstash-plugin-input-s3-unit/)
+[![Travis Build Status](https://travis-ci.org/logstash-plugins/logstash-input-s3.svg)](https://travis-ci.org/logstash-plugins/logstash-input-s3)
 
 This is a plugin for [Logstash](https://github.com/elastic/logstash).
 
@@ -18,6 +17,7 @@ permissions applied to the AWS IAM Policy being used:
 You might also need `s3:DeleteObject` when setting S3 input to delete on read.
 And the `s3:CreateBucket` permission to create a backup bucket unless already
 exists.
+In addition, when `backup_to_bucket` is used, the `s3:PutObject` action is also required.
 
 For buckets that have versioning enabled, you might need to add additional
 permissions.
@@ -74,7 +74,12 @@ gem "logstash-filter-awesome", :path => "/your/local/logstash-filter-awesome"
 ```
 - Install plugin
 ```sh
+# Logstash 2.3 and higher
+bin/logstash-plugin install --no-verify
+
+# Prior to Logstash 2.3
 bin/plugin install --no-verify
+
 ```
 - Run Logstash with your plugin
 ```sh
@@ -92,7 +97,12 @@ gem build logstash-filter-awesome.gemspec
 ```
 - Install the plugin from the Logstash home
 ```sh
-bin/plugin install /your/local/plugin/logstash-filter-awesome.gem
+# Logstash 2.3 and higher
+bin/logstash-plugin install --no-verify
+
+# Prior to Logstash 2.3
+bin/plugin install --no-verify
+
 ```
 - Start Logstash and proceed to test the plugin
 

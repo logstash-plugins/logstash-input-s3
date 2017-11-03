@@ -3,6 +3,11 @@ require "logstash/inputs/s3/processor"
 require "logstash/util"
 require "thread"
 require "concurrent"
+require "aws-sdk"
+
+module Aws;
+  const_set(:S3, Aws::S3);
+end
 
 module LogStash module Inputs class S3
   # This class Manage the processing threads and share the same processor instance
@@ -60,7 +65,7 @@ module LogStash module Inputs class S3
         if remote_file = @work_queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
           LogStash::Util.set_thread_name("<s3|worker#{worker_id}")
 
-          begin    
+          begin
             @processor.handle(remote_file)
           rescue Aws::S3::Errors::NoSuchKey
             # This mean the file on S3 were removed under our current operation,
