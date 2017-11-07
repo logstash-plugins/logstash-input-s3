@@ -1,3 +1,6 @@
+## 3.1.8
+  - Update gemspec summary
+
 ## 3.1.7
   - Fix missing last multi-line entry #120
 
