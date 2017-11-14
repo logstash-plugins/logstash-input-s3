@@ -196,8 +196,9 @@ The AWS Session token for temporary credential
 
 Where to write the since database (keeps track of the date
 the last handled file was added to S3). The default will write
-sincedb files to some path matching "$HOME/.sincedb*"
-Should be a path with filename not just a directory.
+sincedb files to in the directory '{path.data}/plugins/inputs/s3/'
+
+If specified, this setting must be a filename path and not just a directory.
 
 [id="plugins-{type}s-{plugin}-temporary_directory"]
 ===== `temporary_directory` 
