@@ -1,3 +1,8 @@
+## 3.1.9
+  - Change default sincedb path to live in `{path.data}/plugins/inputs/s3` instead of $HOME.
+    Upgrades should not be negatively impacted because the old file in $HOME should be detected
+    and migrated to the new default location automatically.
+
 ## 3.1.8
   - Update gemspec summary
 
