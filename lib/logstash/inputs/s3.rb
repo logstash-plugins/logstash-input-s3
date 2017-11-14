@@ -295,6 +295,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     # Migrate old default sincedb path to new one.
     if ENV["HOME"]
+      # This is the old file path including the old digest mechanism.
+      # It remains as a way to automatically upgrade users with the old default ($HOME)
+      # to the new default (path.data)
       old = File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
       if File.exist?(old)
         logger.info("Migrating old sincedb in $HOME to {path.data}")
