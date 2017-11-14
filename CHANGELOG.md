@@ -1,7 +1,6 @@
 ## 3.1.9
   - Change default sincedb path to live in `{path.data}/plugins/inputs/s3` instead of $HOME.
-    Upgrades should not be negatively impacted because the old file in $HOME should be detected
-    and migrated to the new default location automatically.
+    Prior Logstash installations (using $HOME default) are automatically migrated.
 
 ## 3.1.8
   - Update gemspec summary
