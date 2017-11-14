@@ -27,9 +27,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
 
-  # Where to write the since database (keeps track of the date
-  # the last handled file was added to S3). The default will write
-  # sincedb files to some path matching "$HOME/.sincedb*"
+  # The path to use for writing state. The state stored by this plugin is
+  # a memory of files already processed by this plugin.
+  #
+  # If not specified, the default is in `{path.data}/plugins/inputs/s3/...`
+  #
   # Should be a path with filename not just a directory.
   config :sincedb_path, :validate => :string, :default => nil
 
@@ -286,7 +288,26 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def sincedb_file
-    File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+    digest = Digest::MD5.hexdigest("#{@bucket}+#{@prefix}")
+    dir = File.join(LogStash::SETTINGS.get_value("path.data"), "plugins", "inputs", "s3")
+    FileUtils::mkdir_p(dir)
+    path = File.join(dir, "sincedb_#{digest}")
+
+    # Migrate old default sincedb path to new one.
+    if ENV["HOME"]
+      old = File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
+      if File.exist?(old)
+        logger.info("Migrating old sincedb in $HOME to {path.data}")
+        FileUtils.mv(old, path)
+      end
+    end
+
+    path
+  end
+
+
+  private
+  def old_sincedb_file
   end
 
   private
