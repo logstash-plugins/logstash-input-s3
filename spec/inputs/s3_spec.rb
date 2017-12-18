@@ -81,11 +81,11 @@ describe LogStash::Inputs::S3 do
   describe "#list_new_files" do
     before { allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects_list } }
 
-    let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now) }
+    let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now, :content_length => 10) }
     let(:objects_list) {
       [
-        double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day),
-        double(:key => 'exclude/logstash', :last_modified => Time.now - 2 * day),
+        double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day, :content_length => 100),
+        double(:key => 'exclude/logstash', :last_modified => Time.now - 2 * day, :content_length => 50),
         present_object
       ]
     }
@@ -105,7 +105,7 @@ describe LogStash::Inputs::S3 do
     context "If the bucket is the same as the backup bucket" do
       it 'should ignore files from the bucket if they match the backup prefix' do
         objects_list = [
-          double(:key => 'mybackup-log-1', :last_modified => Time.now),
+          double(:key => 'mybackup-log-1', :last_modified => Time.now, :content_length => 5),
           present_object
         ]
 
@@ -131,7 +131,7 @@ describe LogStash::Inputs::S3 do
         prefix = 'mysource/'
 
         objects_list = [
-          double(:key => prefix, :last_modified => Time.now),
+          double(:key => prefix, :last_modified => Time.now, :content_length => 5),
           present_object
         ]
 
@@ -144,9 +144,9 @@ describe LogStash::Inputs::S3 do
 
     it 'should sort return object sorted by last_modification date with older first' do
       objects = [
-        double(:key => 'YESTERDAY', :last_modified => Time.now - day),
-        double(:key => 'TODAY', :last_modified => Time.now),
-        double(:key => 'TWO_DAYS_AGO', :last_modified => Time.now - 2 * day)
+        double(:key => 'YESTERDAY', :last_modified => Time.now - day, :content_length => 5),
+        double(:key => 'TODAY', :last_modified => Time.now, :content_length => 5),
+        double(:key => 'TWO_DAYS_AGO', :last_modified => Time.now - 2 * day, :content_length => 5)
       ]
 
       allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects }
@@ -225,7 +225,7 @@ describe LogStash::Inputs::S3 do
 
   context 'when working with logs' do
     let(:objects) { [log] }
-    let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day) }
+    let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day, :content_length => 5) }
     let(:data) { File.read(log_file) }
 
     before do
@@ -270,7 +270,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context "multiple compressed streams" do
-      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
+      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day, :content_length => 5) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'multiple_compressed_streams.gz') }
 
       include_examples "generated events" do
@@ -279,7 +279,7 @@ describe LogStash::Inputs::S3 do
     end
       
     context 'compressed' do
-      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day) }
+      let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day, :content_length => 5) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }
 
       include_examples "generated events"
