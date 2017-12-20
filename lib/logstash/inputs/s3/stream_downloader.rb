@@ -1,7 +1,8 @@
 # encoding: utf-8
-#
+require "logstash/inputs/base"
 require "stud/temporary"
-module LogStash module Inputs class S3
+
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   class StreamDownloader
     def initialize(remote_object, writer = StringIO.new)
       @writer = writer

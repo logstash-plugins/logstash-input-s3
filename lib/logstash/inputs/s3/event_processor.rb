@@ -1,5 +1,7 @@
 # encoding: utf-8
-module LogStash module Inputs class S3
+require "logstash/inputs/base"
+
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   # Take the raw event from the files and apply the codec
   # and the metadata.
   class EventProcessor

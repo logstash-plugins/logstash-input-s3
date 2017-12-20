@@ -1,7 +1,9 @@
 # encoding: utf-8
+require "logstash/inputs/base"
+
 require "fileutils"
 
-module LogStash module Inputs class S3
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   class PostProcessor
     class UpdateSinceDB
       def initialize(sincedb)

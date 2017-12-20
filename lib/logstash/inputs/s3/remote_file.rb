@@ -1,8 +1,10 @@
 # encoding: utf-8
+require "logstash/inputs/base"
+
 require "logstash/inputs/s3/stream_downloader"
 require "forwardable"
 
-module LogStash module Inputs class S3
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   class RemoteFile
     class NoKeepAlive
       def self.notify!

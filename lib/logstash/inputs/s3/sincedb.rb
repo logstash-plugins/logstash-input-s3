@@ -1,10 +1,12 @@
 # encoding: utf-8
+require "logstash/inputs/base"
+
 require "logstash/util"
 require "logstash/json"
 require "thread_safe"
 require "concurrent"
 
-module LogStash module Inputs class S3
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   class SinceDB
     SinceDBKey = Struct.new(:key, :etag, :bucket_name) do
       def ==(other)

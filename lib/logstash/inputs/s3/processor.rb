@@ -1,7 +1,9 @@
 # encoding: utf-8
+require "logstash/inputs/base"
+
 require "aws-sdk"
 
-module LogStash module Inputs class S3
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   # The processor represent a workers thread
   class Processor
     def initialize(validator, event_processor, post_processors = [])

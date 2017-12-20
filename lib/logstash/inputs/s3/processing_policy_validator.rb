@@ -1,5 +1,7 @@
 # encoding: utf-8
-module LogStash module Inputs class S3
+require "logstash/inputs/base"
+
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   class ProcessingPolicyValidator
     class SkipEndingDirectory
       ENDING_DIRECTORY_STRING = "/"

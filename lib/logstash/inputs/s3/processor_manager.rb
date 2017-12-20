@@ -1,10 +1,12 @@
 # encoding: utf-8
+require "logstash/inputs/base"
+
 require "logstash/inputs/s3/processor"
 require "logstash/util"
 require "thread"
 require "concurrent"
 
-module LogStash module Inputs class S3
+module LogStash module Inputs class S3 < LogStash::Inputs::Base
   # This class Manage the processing threads and share the same processor instance
   # The event processor and the post processors need to be threadsafe
   class ProcessorManager
