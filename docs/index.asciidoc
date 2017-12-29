@@ -49,6 +49,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-session_token>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-sincedb_path>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-temporary_directory>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-gzip_prefer>> |<<string,string>>, one of `["memory","speed"]`|No
 |=======================================================================
 
 Also see <<plugins-{type}s-{plugin}-common-options>> for a list of options supported by all
@@ -209,6 +210,15 @@ If specified, this setting must be a filename path and not just a directory.
 Set the directory where logstash will store the tmp files before processing them.
 default to the current OS temporary directory in linux /tmp/logstash
 
+[id="plugins-{type}s-{plugin}-gzip_prefer"]
+===== `gzip_prefer`
+
+  * Value type is <<string,string>>, one of `["memory","speed"]`
+  * Default value is `"memory"`
+
+If processing gzip files, prefer either a stable memory profile or all-out speed.
+This configuration is to be used with caution, as selecting `speed` comes at the cost of
+unpredictable memory consumption, as each gzip chunk is spooled into memory and processed whole.
 
 
 [id="plugins-{type}s-{plugin}-common-options"]

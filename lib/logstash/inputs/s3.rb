@@ -60,6 +60,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  # If processing gzip files, prefer either a stable memory profile or all-out speed.
+  # This configuration is to be used with caution, as selecting `speed` comes at the cost of
+  # unpredictable memory consumption, as each gzip chunk is spooled into memory and processed whole
+  config :gzip_prefer, :validate => %w(memory speed), :default => 'memory'
+
   public
   def register
     require "fileutils"
@@ -257,6 +262,13 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     File.open(filename) do |zio|
       while true do
         io = Zlib::GzipReader.new(zio)
+        case @gzip_prefer
+        when "memory"
+          io.each_line(&block)
+        when "speed"
+          io.read.each_line(&block)
+        else fail("invalid gzip_optimise configuration")
+        end
         io.each_line { |line| block.call(line) }
         unused = io.unused
         io.finish
