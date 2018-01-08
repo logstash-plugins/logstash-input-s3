@@ -306,7 +306,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'encoded' do
-      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'invalid_utf8.log') }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'invalid_utf8.gbk.log') }
 
       include_examples "generated events"
     end
