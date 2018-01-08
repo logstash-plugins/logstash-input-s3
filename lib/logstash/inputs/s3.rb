@@ -223,7 +223,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -238,7 +238,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -271,9 +271,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def gzip?(filename)
-    filename.end_with?('.gz')
+    filename.end_with?('.gz') || filename.end_with?('.gzip')
   end
-  
+
   private
   def sincedb 
     @sincedb ||= if @sincedb_path.nil?
