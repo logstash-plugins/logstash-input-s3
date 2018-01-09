@@ -1,3 +1,7 @@
+## 3.2.0
+ - Add support for auto-detecting gzip files with `.gzip` extension, in addition to existing support for `*.gz`
+ - Improve performance of gzip decoding by 10x by using Java's Zlib
+
 ## 3.1.9
   - Change default sincedb path to live in `{path.data}/plugins/inputs/s3` instead of $HOME.
     Prior Logstash installations (using $HOME default) are automatically migrated.
