@@ -9,6 +9,14 @@ require "stud/temporary"
 require "aws-sdk"
 require "logstash/inputs/s3/patch"
 
+require 'java'
+java_import java.io.InputStream
+java_import java.io.InputStreamReader
+java_import java.io.FileInputStream
+java_import java.io.BufferedReader
+java_import java.util.zip.GZIPInputStream
+java_import java.util.zip.ZipException
+
 Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
 #
@@ -253,25 +261,27 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_gzip_file(filename, block)
-    # Details about multiple streams and the usage of unused from: http://code.activestate.com/lists/ruby-talk/11168/
-    File.open(filename) do |zio|
-      while true do
-        io = Zlib::GzipReader.new(zio)
-        io.each_line { |line| block.call(line) }
-        unused = io.unused
-        io.finish
-        break if unused.nil?
-        zio.pos -= unused.length # reset the position to the other block in the stream
-      end
+    file_stream = FileInputStream.new(filename)
+    gzip_stream = GZIPInputStream.new(file_stream)
+    decoder = InputStreamReader.new(gzip_stream, "UTF-8")
+    buffered = BufferedReader.new(decoder)
+
+    while (line = buffered.readLine())
+      block.call(line)
     end
-  rescue Zlib::Error, Zlib::GzipFile::Error => e
+  rescue ZipException => e
     @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
     raise e
+  ensure
+    buffered.close unless buffered.nil?
+    decoder.close unless decoder.nil?
+    gzip_stream.close unless gzip_stream.nil?
+    file_stream.close unless file_stream.nil?
   end
 
   private
   def gzip?(filename)
-    filename.end_with?('.gz')
+    filename.end_with?('.gz','.gzip')
   end
   
   private
