@@ -163,7 +163,9 @@ describe LogStash::Inputs::S3 do
         plugin.register
 
         s3object = Aws::S3::Object.new('mybucket', 'testkey')
-        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with(:copy_source => "mybucket/testkey")
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "private",
+                                                                              :storage_class => "STANDARD"})
         expect(s3object).to_not receive(:delete)
 
         plugin.backup_to_bucket(s3object)
@@ -174,7 +176,9 @@ describe LogStash::Inputs::S3 do
         plugin.register
 
         s3object = Aws::S3::Object.new('mybucket', 'testkey')
-        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with(:copy_source => "mybucket/testkey")
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "private",
+                                                                              :storage_class => "STANDARD"})
         expect(s3object).to receive(:delete)
 
         plugin.backup_to_bucket(s3object)
@@ -186,7 +190,71 @@ describe LogStash::Inputs::S3 do
         plugin.register
 
         s3object = Aws::S3::Object.new('mybucket', 'testkey')
-        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with(:copy_source => "mybucket/testkey")
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "private",
+                                                                              :storage_class => "STANDARD"})
+        expect(s3object).to_not receive(:delete)
+
+        plugin.backup_to_bucket(s3object)
+      end
+
+      it 'should add the specified storage class to the backup file' do
+        plugin = LogStash::Inputs::S3.new(config.merge({ "backup_to_bucket" => "mybackup",
+                                                           "backup_storage_class" => "STANDARD_IA" }))
+        plugin.register
+
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "private",
+                                                                              :storage_class => "STANDARD_IA"})
+        expect(s3object).to_not receive(:delete)
+
+        plugin.backup_to_bucket(s3object)
+      end
+
+      it 'should add the specified canned acl to the backup file' do
+        plugin = LogStash::Inputs::S3.new(config.merge({ "backup_to_bucket" => "mybackup",
+                                                           "backup_canned_acl" => "public-read" }))
+        plugin.register
+
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "public-read",
+                                                                              :storage_class => "STANDARD"})
+        expect(s3object).to_not receive(:delete)
+
+        plugin.backup_to_bucket(s3object)
+      end
+
+      it 'should add the server side encryption to the backup file' do
+        plugin = LogStash::Inputs::S3.new(config.merge({ "backup_to_bucket" => "mybackup",
+                                                           "backup_server_side_encryption" => true,
+                                                           "backup_server_side_encryption_algorithm" => "aws:kms" }))
+        plugin.register
+
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "private",
+                                                                              :storage_class => "STANDARD",
+                                                                              :server_side_encryption => "aws:kms"})
+        expect(s3object).to_not receive(:delete)
+
+        plugin.backup_to_bucket(s3object)
+      end
+
+      it 'should add the server side encryption with the specified ssekms_key_id to the backup file' do
+        plugin = LogStash::Inputs::S3.new(config.merge({ "backup_to_bucket" => "mybackup",
+                                                           "backup_server_side_encryption" => true,
+                                                           "backup_server_side_encryption_algorithm" => "aws:kms",
+                                                           "backup_ssekms_key_id" => "alias/mykey",  }))
+        plugin.register
+
+        s3object = Aws::S3::Object.new('mybucket', 'testkey')
+        expect_any_instance_of(Aws::S3::Object).to receive(:copy_from).with({:copy_source => "mybucket/testkey",
+                                                                              :acl => "private",
+                                                                              :storage_class => "STANDARD",
+                                                                              :server_side_encryption => "aws:kms",
+                                                                              :ssekms_key_id => "alias/mykey" })
         expect(s3object).to_not receive(:delete)
 
         plugin.backup_to_bucket(s3object)
@@ -277,7 +345,7 @@ describe LogStash::Inputs::S3 do
         let(:events_to_process) { 16 }
       end
     end
-      
+
     context 'compressed' do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day, :content_length => 5) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }

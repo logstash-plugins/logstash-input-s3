@@ -51,6 +51,27 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # choose a new 'folder' to place the files in
   config :backup_add_prefix, :validate => :string, :default => nil
 
+  # The S3 canned ACL to use when backing up the files. Defaults to "private".
+  config :backup_canned_acl, :validate => ["private", "public-read", "public-read-write", "authenticated-read"],
+         :default => "private"
+
+  # Specifies what S3 storage class to use when backing up the file.
+  # More information about the different storage classes can be found:
+  # http://docs.aws.amazon.com/AmazonS3/latest/dev/storage-class-intro.html
+  # Defaults to STANDARD.
+  config :backup_storage_class, :validate => ["STANDARD", "REDUCED_REDUNDANCY", "STANDARD_IA"], :default => "STANDARD"
+
+  # Specifies wether or not to use S3's server side encryption on backup files. Defaults to no encryption.
+  config :backup_server_side_encryption, :validate => :boolean, :default => nil
+
+  # Specifies what type of encryption to use when SSE is enabled on backup files.
+  config :backup_server_side_encryption_algorithm, :validate => ["AES256", "aws:kms"], :default => "AES256"
+
+  # The key to use when specified along with backup_server_side_encryption_algorithm => aws:kms.
+  # If backup_server_side_encryption_algorithm => aws:kms is set but this is not default KMS key is used.
+  # http://docs.aws.amazon.com/AmazonS3/latest/dev/UsingKMSEncryption.html
+  config :backup_ssekms_key_id, :validate => :string
+
   # Path of a local directory to backup processed files to.
   config :backup_to_dir, :validate => :string, :default => nil
 
@@ -126,7 +147,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def backup_to_bucket(object)
     unless @backup_to_bucket.nil?
       backup_key = "#{@backup_add_prefix}#{object.key}"
-      @backup_bucket.object(backup_key).copy_from(:copy_source => "#{object.bucket_name}/#{object.key}")
+      options = backup_options()
+      options[:copy_source] = "#{object.bucket_name}/#{object.key}"
+      @backup_bucket.object(backup_key).copy_from(options)
       if @delete
         object.delete()
       end
@@ -231,7 +254,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -246,7 +269,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def read_file(filename, &block)
-    if gzip?(filename) 
+    if gzip?(filename)
       read_gzip_file(filename, block)
     else
       read_plain_file(filename, block)
@@ -283,9 +306,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz','.gzip')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
@@ -387,6 +410,16 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   private
   def get_s3object
     s3 = Aws::S3::Resource.new(aws_options_hash)
+  end
+
+  private
+  def backup_options
+    {
+      :acl => @backup_canned_acl,
+      :server_side_encryption => @backup_server_side_encryption ? @backup_server_side_encryption_algorithm : nil,
+      :ssekms_key_id => @backup_server_side_encryption_algorithm == "aws:kms" ? @backup_ssekms_key_id : nil,
+      :storage_class => @backup_storage_class
+    }
   end
 
   private
