@@ -26,6 +26,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   include LogStash::PluginMixins::AwsConfig::V2
 
   config_name "s3"
+  
+
 
   default :codec, "plain"
 
@@ -68,6 +70,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  # Specify a custom endpoint for use with non-AWS S3 implementations, e.g.,
+  # Ceph.  Provide a URL in the format http://127.0.0.1:8080/
+  config :endpoint, :validate => :string
+
+  # When false, specify the bucket in the subdomain.  When true, specify the bucket in the path.
+  config :force_path_style, :validate => :boolean, :default => false
+  
+  
+  
   public
   def register
     require "fileutils"
@@ -75,6 +86,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     require "aws-sdk-resources"
 
     @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
+
 
     s3 = get_s3object
 
@@ -386,8 +398,32 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    s3 = Aws::S3::Resource.new(aws_options_hash)
+    s3 = Aws::S3::Resource.new(full_options)
   end
+  
+  
+  def full_options
+    options = Hash.new
+    options.merge(aws_options_hash)
+           .merge(endpoint_options)
+  end 
+
+  def endpoint_options
+    if @endpoint
+      uri = URI(@endpoint)
+      {
+        :endpoint => @endpoint,
+        :force_path_style => @force_path_style,
+      }
+    else
+      {}
+    end
+  end  
+  
+  def bucket_resource
+    Aws::S3::Bucket.new(@bucket, full_options)
+  end
+  
 
   private
   module SinceDB
