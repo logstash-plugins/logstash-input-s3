@@ -62,7 +62,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config :backup_storage_class, :validate => ["STANDARD", "REDUCED_REDUNDANCY", "STANDARD_IA"], :default => "STANDARD"
 
   # Specifies wether or not to use S3's server side encryption on backup files. Defaults to no encryption.
-  config :backup_server_side_encryption, :validate => :boolean, :default => nil
+  config :backup_server_side_encryption, :validate => :boolean, :default => false
 
   # Specifies what type of encryption to use when SSE is enabled on backup files.
   config :backup_server_side_encryption_algorithm, :validate => ["AES256", "aws:kms"], :default => "AES256"
