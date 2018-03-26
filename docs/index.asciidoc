@@ -207,7 +207,6 @@ If specified, this setting must be a filename path and not just a directory.
   * Default value is `"/tmp/logstash"`
 
 Set the directory where logstash will store the tmp files before processing them.
-default to the current OS temporary directory in linux /tmp/logstash
 
 
 
