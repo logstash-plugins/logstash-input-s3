@@ -35,6 +35,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
 
+  # When set to true, the bucket name is always left in the request URI and
+  # never moved to the host as a sub-domain.
+  config :force_path_style, :validate => :boolean, :default => false
+
   # The path to use for writing state. The state stored by this plugin is
   # a memory of files already processed by this plugin.
   #
@@ -386,7 +390,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    s3 = Aws::S3::Resource.new(aws_options_hash)
+    options = aws_options_hash || {}
+    if @force_path_style == true
+      options.merge!(:force_path_style => @force_path_style)
+    end
+
+    s3 = Aws::S3::Resource.new(options)
   end
 
   private

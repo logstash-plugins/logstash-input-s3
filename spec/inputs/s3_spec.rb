@@ -76,6 +76,24 @@ describe LogStash::Inputs::S3 do
         subject.send(:get_s3object)
       end
     end
+
+    context 'when force_path_style is set' do
+      let(:settings) {
+        {
+          "force_path_style" => true,
+          "bucket" => "logstash-test",
+        }
+      }
+
+      it 'should instantiate AWS::S3 clients with force_path_style set' do
+        expect(Aws::S3::Resource).to receive(:new).with({
+          :region => subject.region,
+          :force_path_style => true
+        })
+
+        subject.send(:get_s3object)
+      end
+    end
   end
 
   describe "#list_new_files" do

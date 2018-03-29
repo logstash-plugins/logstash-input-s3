@@ -41,6 +41,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-bucket>> |<<string,string>>|Yes
 | <<plugins-{type}s-{plugin}-delete>> |<<boolean,boolean>>|No
 | <<plugins-{type}s-{plugin}-exclude_pattern>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-force_path_style>> |<<boolean,boolean>>|No
 | <<plugins-{type}s-{plugin}-interval>> |<<number,number>>|No
 | <<plugins-{type}s-{plugin}-prefix>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-proxy_uri>> |<<string,string>>|No
@@ -138,6 +139,15 @@ Whether to delete processed files from the original bucket.
   * Default value is `nil`
 
 Ruby style regexp of keys to exclude from the bucket
+
+[id="plugins-{type}s-{plugin}-force_path_style"]
+===== `force_path_style`
+
+  * Value type is <<boolean,boolean>>
+  * Default value is `false`
+
+When set to `true`, the bucket name is always left in the request URI and
+never moved to the host as a sub-domain.
 
 [id="plugins-{type}s-{plugin}-interval"]
 ===== `interval` 
