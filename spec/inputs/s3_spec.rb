@@ -77,21 +77,36 @@ describe LogStash::Inputs::S3 do
       end
     end
 
-    context 'when force_path_style is set' do
-      let(:settings) {
-        {
-          "force_path_style" => true,
-          "bucket" => "logstash-test",
+    describe "additional_settings" do
+      context 'when force_path_style is set' do
+        let(:settings) {
+          {
+            "additional_settings" => { "force_path_style" => true },
+            "bucket" => "logstash-test",
+          }
         }
-      }
 
-      it 'should instantiate AWS::S3 clients with force_path_style set' do
-        expect(Aws::S3::Resource).to receive(:new).with({
-          :region => subject.region,
-          :force_path_style => true
-        })
+        it 'should instantiate AWS::S3 clients with force_path_style set' do
+          expect(Aws::S3::Resource).to receive(:new).with({
+            :region => subject.region,
+            "force_path_style" => true
+          }).and_call_original
 
-        subject.send(:get_s3object)
+          subject.send(:get_s3object)
+        end
+      end
+
+      context 'when an unknown setting is given' do
+        let(:settings) {
+          {
+            "additional_settings" => { "this_setting_doesnt_exist" => true },
+            "bucket" => "logstash-test",
+          }
+        }
+
+        it 'should raise an error' do
+          expect { subject.send(:get_s3object) }.to raise_error(ArgumentError)
+        end
       end
     end
   end

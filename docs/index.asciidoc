@@ -140,14 +140,27 @@ Whether to delete processed files from the original bucket.
 
 Ruby style regexp of keys to exclude from the bucket
 
-[id="plugins-{type}s-{plugin}-force_path_style"]
-===== `force_path_style`
+[id="plugins-{type}s-{plugin}-additional_settings"]
+===== `additional_settings`
 
-  * Value type is <<boolean,boolean>>
-  * Default value is `false`
+  * Value type is <<hash,hash>>
+  * Default value is `{}`
 
-When set to `true`, the bucket name is always left in the request URI and
-never moved to the host as a sub-domain.
+Key-value pairs of settings and corresponding values used to parametrize
+the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/api/Aws/S3/Client.html[the AWS SDK documentation]. Example:
+
+[source,ruby]
+    input {
+      s3 {
+        "access_key_id" => "1234",
+        "secret_access_key" => "secret",
+        "bucket" => "logstash-test",
+        "additional_settings" => {
+          "force_path_style => true,
+          "follow_redirects" => false
+        }
+      }
+    }
 
 [id="plugins-{type}s-{plugin}-interval"]
 ===== `interval` 
