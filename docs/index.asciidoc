@@ -34,6 +34,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 |=======================================================================
 |Setting |Input type|Required
 | <<plugins-{type}s-{plugin}-access_key_id>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-additional_settings>> |<<hash,hash>>|No
 | <<plugins-{type}s-{plugin}-aws_credentials_file>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-backup_add_prefix>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-backup_to_bucket>> |<<string,string>>|No
@@ -138,6 +139,28 @@ Whether to delete processed files from the original bucket.
   * Default value is `nil`
 
 Ruby style regexp of keys to exclude from the bucket
+
+[id="plugins-{type}s-{plugin}-additional_settings"]
+===== `additional_settings`
+
+  * Value type is <<hash,hash>>
+  * Default value is `{}`
+
+Key-value pairs of settings and corresponding values used to parametrize
+the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/api/Aws/S3/Client.html[the AWS SDK documentation]. Example:
+
+[source,ruby]
+    input {
+      s3 {
+        "access_key_id" => "1234",
+        "secret_access_key" => "secret",
+        "bucket" => "logstash-test",
+        "additional_settings" => {
+          "force_path_style => true,
+          "follow_redirects" => false
+        }
+      }
+    }
 
 [id="plugins-{type}s-{plugin}-interval"]
 ===== `interval` 
