@@ -1,3 +1,6 @@
+## 3.3.1
+ - Improve error handling when listing/downloading from S3 #144
+
 ## 3.3.0
   - Add documentation for endpoint, role_arn and role_session_name #142
   - Add support for additional_settings option #141

@@ -110,18 +110,21 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def list_new_files
     objects = {}
 
-    @s3bucket.objects(:prefix => @prefix).each do |log|
-      @logger.debug("S3 input: Found key", :key => log.key)
-
-      unless ignore_filename?(log.key)
-        if sincedb.newer?(log.last_modified) && log.content_length > 0
-          objects[log.key] = log.last_modified
-          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-          @logger.debug("objects[] length is: ", :length => objects.length)
+    begin
+      @s3bucket.objects(:prefix => @prefix).each do |log|
+        @logger.debug("S3 input: Found key", :key => log.key)
+        unless ignore_filename?(log.key)
+          if sincedb.newer?(log.last_modified) && log.content_length > 0
+            objects[log.key] = log.last_modified
+            @logger.debug("S3 input: Adding to objects[]", :key => log.key)
+            @logger.debug("objects[] length is: ", :length => objects.length)
+          end
         end
       end
+    rescue Aws::Errors::ServiceError => e
+      @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
     end
-    return objects.keys.sort {|a,b| objects[a] <=> objects[b]}
+    objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
 
   public
@@ -372,11 +375,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @logger.debug("S3 input: Download remote file", :remote_key => remote_object.key, :local_filename => local_filename)
     File.open(local_filename, 'wb') do |s3file|
       return completed if stop?
-      remote_object.get(:response_target => s3file)
+      begin
+        remote_object.get(:response_target => s3file)
+        completed = true
+      rescue Aws::Errors::ServiceError => e
+        @logger.warn("S3 input: Unable to download remote file", :remote_key => remote_object.key, :message => e.message)
+      end
     end
-    completed = true
-
-    return completed
+    completed
   end
 
   private
