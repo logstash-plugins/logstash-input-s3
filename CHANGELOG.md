@@ -1,3 +1,7 @@
+## 3.3.0
+  - Add documentation for endpoint, role_arn and role_session_name #142
+  - Add support for additional_settings option #141
+
 ## 3.2.0
  - Add support for auto-detecting gzip files with `.gzip` extension, in addition to existing support for `*.gz`
  - Improve performance of gzip decoding by 10x by using Java's Zlib
