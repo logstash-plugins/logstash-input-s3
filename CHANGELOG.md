@@ -1,3 +1,6 @@
+## 3.3.2
+  - Docs: Set the default_codec doc attribute.
+
 ## 3.3.1
  - Improve error handling when listing/downloading from S3 #144
 
