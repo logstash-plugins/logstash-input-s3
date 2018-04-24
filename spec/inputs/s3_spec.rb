@@ -76,6 +76,39 @@ describe LogStash::Inputs::S3 do
         subject.send(:get_s3object)
       end
     end
+
+    describe "additional_settings" do
+      context 'when force_path_style is set' do
+        let(:settings) {
+          {
+            "additional_settings" => { "force_path_style" => true },
+            "bucket" => "logstash-test",
+          }
+        }
+
+        it 'should instantiate AWS::S3 clients with force_path_style set' do
+          expect(Aws::S3::Resource).to receive(:new).with({
+            :region => subject.region,
+            "force_path_style" => true
+          }).and_call_original
+
+          subject.send(:get_s3object)
+        end
+      end
+
+      context 'when an unknown setting is given' do
+        let(:settings) {
+          {
+            "additional_settings" => { "this_setting_doesnt_exist" => true },
+            "bucket" => "logstash-test",
+          }
+        }
+
+        it 'should raise an error' do
+          expect { subject.send(:get_s3object) }.to raise_error(ArgumentError)
+        end
+      end
+    end
   end
 
   describe "#list_new_files" do
@@ -288,6 +321,62 @@ describe LogStash::Inputs::S3 do
     it "deletes the temporary file" do
       events = fetch_events(config)
       expect(Dir.glob(File.join(temporary_directory, "*")).size).to eq(0)
+    end
+  end
+
+  context 'while communicating with s3' do
+    let(:config) {
+      {
+          "access_key_id" => "1234",
+          "secret_access_key" => "secret",
+          "bucket" => "logstash-test",
+          "codec" => "json",
+      }
+    }
+    %w(AccessDenied NotFound).each do |error|
+      context "while listing bucket contents, #{error} is returned" do
+        before do
+          Aws.config[:s3] = {
+              stub_responses: {
+                list_objects: error
+              }
+          }
+        end
+
+        it 'should not crash the plugin' do
+          events = fetch_events(config)
+          expect(events.size).to eq(0)
+        end
+      end
+    end
+
+    %w(AccessDenied NoSuchKey).each do |error|
+      context "when retrieving an object, #{error} is returned" do
+        let(:objects) { [log] }
+        let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day, :content_length => 5) }
+
+        let(:config) {
+          {
+              "access_key_id" => "1234",
+              "secret_access_key" => "secret",
+              "bucket" => "logstash-test",
+              "codec" => "json",
+          }
+        }
+        before do
+          Aws.config[:s3] = {
+              stub_responses: {
+              get_object: error
+              }
+          }
+          allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects }
+        end
+
+        it 'should not crash the plugin' do
+          events = fetch_events(config)
+          expect(events.size).to eq(0)
+        end
+      end
     end
   end
 
