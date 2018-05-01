@@ -135,6 +135,36 @@ describe LogStash::Inputs::S3 do
       expect(plugin.list_new_files).to eq(objects_list.map(&:key))
     end
 
+    context 'when all files are excluded from a bucket' do
+      let(:objects_list) {
+        [
+            double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day, :content_length => 100),
+            double(:key => 'exclude/logstash', :last_modified => Time.now - 2 * day, :content_length => 50),
+        ]
+      }
+
+      it 'should not log that no files were found in the bucket' do
+        plugin = LogStash::Inputs::S3.new(config.merge({ "exclude_pattern" => "^exclude" }))
+        plugin.register
+        allow(plugin.logger).to receive(:debug).with(anything, anything)
+
+        expect(plugin.logger).not_to receive(:info).with(/No files found/, anything)
+        expect(plugin.logger).to receive(:debug).with(/Ignoring/, anything)
+        expect(plugin.list_new_files).to be_empty
+      end
+    end
+
+    context 'with an empty bucket' do
+      let(:objects_list) { [] }
+
+      it 'should log that no files were found in the bucket' do
+        plugin = LogStash::Inputs::S3.new(config)
+        plugin.register
+        expect(plugin.logger).to receive(:info).with(/No files found/, anything)
+        expect(plugin.list_new_files).to be_empty
+      end
+    end
+
     context "If the bucket is the same as the backup bucket" do
       it 'should ignore files from the bucket if they match the backup prefix' do
         objects_list = [
