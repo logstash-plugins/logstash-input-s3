@@ -89,7 +89,7 @@ describe LogStash::Inputs::S3 do
         it 'should instantiate AWS::S3 clients with force_path_style set' do
           expect(Aws::S3::Resource).to receive(:new).with({
             :region => subject.region,
-            "force_path_style" => true
+            :force_path_style => true
           }).and_call_original
 
           subject.send(:get_s3object)
