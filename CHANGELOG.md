@@ -1,3 +1,6 @@
+## 3.3.3
+  - Symbolize hash keys for additional_settings hash #148
+
 ## 3.3.2
   - Docs: Set the default_codec doc attribute.
 
