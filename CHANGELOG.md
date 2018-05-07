@@ -1,3 +1,6 @@
+## 3.3.4
+  - Log entry when bucket is empty #150
+
 ## 3.3.3
   - Symbolize hash keys for additional_settings hash #148
 
