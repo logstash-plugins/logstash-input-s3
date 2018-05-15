@@ -17,6 +17,20 @@ java_import java.io.BufferedReader
 java_import java.util.zip.GZIPInputStream
 java_import java.util.zip.ZipException
 
+# A simple ThreadFactory to let us name the threads
+class NamedThreadFactory 
+  include java.util.concurrent.ThreadFactory
+
+  def initialize(name)
+    @name = name
+  end
+
+  def newThread(runnable)
+    java.lang.Thread.new(runnable, @name)
+  end
+end
+
+
 Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
 #
@@ -70,6 +84,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  # The number of workers to use when downloading and processing objects found in S3
+  config :workers, :validate => :number, :default => 20
+
   public
   def register
     require "fileutils"
@@ -101,24 +118,27 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   public
   def run(queue)
     @current_thread = Thread.current
+
+    # Name the threads used by this executor
+    threadpool = java.util.concurrent.Executors.newFixedThreadPool(20, NamedThreadFactory.new("<s3.worker"))
+
     Stud.interval(@interval) do
-      process_files(queue)
+      process_files(queue, threadpool)
     end
   end # def run
 
   public
-  def list_new_files
+  def list_new_files(&block)
     objects = {}
     found = false
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
-        @logger.debug("S3 input: Found key", :key => log.key)
+        @logger.trace("S3 input: Found key", :key => log.key)
         if !ignore_filename?(log.key)
           if sincedb.newer?(log.last_modified) && log.content_length > 0
             objects[log.key] = log.last_modified
-            @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-            @logger.debug("objects[] length is: ", :length => objects.length)
+            block.call(log)
           end
         else
           @logger.debug('S3 input: Ignoring', :key => log.key)
@@ -150,15 +170,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   public
-  def process_files(queue)
-    objects = list_new_files
-
-    objects.each do |key|
+  def process_files(queue, threadpool)
+    list_new_files do |object|
       if stop?
         break
       else
-        @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
-        process_log(queue, key)
+        @logger.debug("S3 input processing", :bucket => @bucket, :key => object.key)
+        threadpool.execute do 
+          process_log(queue, object.key)
+        end
       end
     end
   end # def process_files
