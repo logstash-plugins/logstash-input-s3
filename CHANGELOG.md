@@ -1,3 +1,6 @@
+## 3.3.5
+  - [#136](https://github.com/logstash-plugins/logstash-input-s3/pull/136) Avoid plugin crashes when encountering 'bad' files in S3 buckets
+
 ## 3.3.4
   - Log entry when bucket is empty #150
 
