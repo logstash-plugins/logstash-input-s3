@@ -277,7 +277,7 @@ describe LogStash::Inputs::S3 do
     it 'should process events' do
       events = fetch_events(config)
       expect(events.size).to eq(events_to_process)
-      insist { events[0].get("[@metadata][s3]") } == {"key" => log.key }
+      insist { events[0].get("[@metadata][s3][key]") } == log.key
     end
 
     it "deletes the temporary file" do
@@ -344,7 +344,7 @@ describe LogStash::Inputs::S3 do
 
   context 'when working with logs' do
     let(:objects) { [log] }
-    let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day, :content_length => 5) }
+    let(:log) { double(:key => 'uncompressed.log', :last_modified => Time.now - 2 * day, :content_length => 5, :data => { "etag" => 'c2c966251da0bc3229d12c2642ba50a4' }) }
     let(:data) { File.read(log_file) }
 
     before do
@@ -451,5 +451,34 @@ describe LogStash::Inputs::S3 do
 
       include_examples "generated events"
     end
+
+    context 'when include_object_properties is set to true' do
+      let(:config) { super.merge({ "include_object_properties" => true }) }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
+
+      it 'should extract object properties onto [@metadata][s3]' do
+        events = fetch_events(config)
+        events.each do |event|
+          expect(event.get('[@metadata][s3]')).to include(log.data)
+        end
+      end
+
+      include_examples "generated events"
+    end
+
+    context 'when include_object_properties is set to false' do
+      let(:config) { super.merge({ "include_object_properties" => false }) }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
+
+      it 'should NOT extract object properties onto [@metadata][s3]' do
+        events = fetch_events(config)
+        events.each do |event|
+          expect(event.get('[@metadata][s3]')).to_not include(log.data)
+        end
+      end
+
+      include_examples "generated events"
+    end
+
   end
 end
