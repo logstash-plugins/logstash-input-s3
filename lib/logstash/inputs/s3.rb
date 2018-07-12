@@ -70,6 +70,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
 
+  # Whether or not to include the S3 object's properties (last_modified, content_type, metadata)
+  # into each Event at [@metadata][s3]. Regardless of this setting, [@metdata][s3][key] will always
+  # be present.
+  config :include_object_properties, :validate => :boolean, :default => false
+
   public
   def register
     require "fileutils"
@@ -177,8 +182,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   #
   # @param [Queue] Where to push the event
   # @param [String] Which file to read from
+  # @param [S3Object] Source s3 object
   # @return [Boolean] True if the file was completely read, false otherwise.
-  def process_local_log(queue, filename, key)
+  def process_local_log(queue, filename, object)
     @logger.debug('Processing file', :filename => filename)
     metadata = {}
     # Currently codecs operates on bytes instead of stream.
@@ -209,7 +215,13 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
           event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
-          event.set("[@metadata][s3]", { "key" => key })
+          if @include_object_properties
+            event.set("[@metadata][s3]", object.data.to_h)
+          else
+            event.set("[@metadata][s3]", {})
+          end
+
+          event.set("[@metadata][s3][key]", object.key)
 
           queue << event
         end
@@ -365,7 +377,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     filename = File.join(temporary_directory, File.basename(key))
     if download_remote_file(object, filename)
-      if process_local_log(queue, filename, key)
+      if process_local_log(queue, filename, object)
         lastmod = object.last_modified
         backup_to_bucket(object)
         backup_to_dir(filename)
