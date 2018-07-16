@@ -1,3 +1,6 @@
+## 3.3.6
+  - Fixed error in documentation by removing illegal commas [#154](https://github.com/logstash-plugins/logstash-input-s3/pull/154)
+
 ## 3.3.5
   - [#136](https://github.com/logstash-plugins/logstash-input-s3/pull/136) Avoid plugin crashes when encountering 'bad' files in S3 buckets
 
