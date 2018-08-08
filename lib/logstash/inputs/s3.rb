@@ -119,14 +119,16 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
         @logger.debug("S3 input: Found key", :key => log.key)
-        if !ignore_filename?(log.key)
-          if sincedb.newer?(log.last_modified) && log.content_length > 0
-            objects[log.key] = log.last_modified
-            @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-            @logger.debug("objects[] length is: ", :length => objects.length)
-          end
-        else
+        if ignore_filename?(log.key)
           @logger.debug('S3 input: Ignoring', :key => log.key)
+        elsif log.content_length <= 0
+          @logger.debug('S3 Input: Object Zero Length', :key => log.key)
+        elsif !sincedb.newer?(log.last_modified)
+          @logger.debug('S3 Input: Object Not Modified', :key => log.key)
+        else
+          objects[log.key] = log.last_modified
+          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
+          @logger.debug("objects[] length is: ", :length => objects.length)
         end
       end
       @logger.info('S3 input: No files found in bucket', :prefix => prefix) unless found
