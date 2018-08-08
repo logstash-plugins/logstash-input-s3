@@ -126,13 +126,23 @@ describe LogStash::Inputs::S3 do
     it 'should allow user to exclude files from the s3 bucket' do
       plugin = LogStash::Inputs::S3.new(config.merge({ "exclude_pattern" => "^exclude" }))
       plugin.register
-      expect(plugin.list_new_files).to eq([present_object.key])
+
+      files = plugin.list_new_files
+      expect(files).to include(present_object.key)
+      expect(files).to_not include('exclude-this-file-1') # matches exclude pattern
+      expect(files).to_not include('exclude/logstash')    # matches exclude pattern
+      expect(files.size).to eq(1)
     end
 
     it 'should support not providing a exclude pattern' do
       plugin = LogStash::Inputs::S3.new(config)
       plugin.register
-      expect(plugin.list_new_files).to eq(objects_list.map(&:key))
+
+      files = plugin.list_new_files
+      expect(files).to include(present_object.key)
+      expect(files).to include('exclude-this-file-1')   # no exclude pattern given
+      expect(files).to include('exclude/logstash')      # no exclude pattern given
+      expect(files.size).to eq(3)
     end
 
     context 'when all files are excluded from a bucket' do
@@ -177,17 +187,26 @@ describe LogStash::Inputs::S3 do
         plugin = LogStash::Inputs::S3.new(config.merge({ 'backup_add_prefix' => 'mybackup',
                                                          'backup_to_bucket' => config['bucket']}))
         plugin.register
-        expect(plugin.list_new_files).to eq([present_object.key])
+
+        files = plugin.list_new_files
+        expect(files).to include(present_object.key)
+        expect(files).to_not include('mybackup-log-1') # matches backup prefix
+        expect(files.size).to eq(1)
       end
     end
 
     it 'should ignore files older than X' do
       plugin = LogStash::Inputs::S3.new(config.merge({ 'backup_add_prefix' => 'exclude-this-file'}))
 
-      expect_any_instance_of(LogStash::Inputs::S3::SinceDB::File).to receive(:read).exactly(objects_list.size) { Time.now - day }
+
+      allow_any_instance_of(LogStash::Inputs::S3::SinceDB::File).to receive(:read).and_return(Time.now - day)
       plugin.register
 
-      expect(plugin.list_new_files).to eq([present_object.key])
+      files = plugin.list_new_files
+      expect(files).to include(present_object.key)
+      expect(files).to_not include('exclude-this-file-1') # too old
+      expect(files).to_not include('exclude/logstash')    # too old
+      expect(files.size).to eq(1)
     end
 
     it 'should ignore file if the file match the prefix' do
