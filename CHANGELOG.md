@@ -1,3 +1,6 @@
+## Unreleased
+  - Skips objects that are archived to AWS Glacier with a helpful log message (previously they would log as matched, but then fail to load events) [#160](https://github.com/logstash-plugins/logstash-input-s3/pull/160)
+
 ## 3.3.7
   - Added ability to optionally include S3 object properties inside @metadata [#155](https://github.com/logstash-plugins/logstash-input-s3/pull/155)
 
