@@ -112,13 +112,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @current_thread = Thread.current
     Stud.interval(@interval) do
       process_files(queue)
+      stop unless @watch_for_new_files
     end
   end # def run
 
   public
   def list_new_files
-    stop unless @watch_for_new_files
-    
     objects = {}
     found = false
     begin
