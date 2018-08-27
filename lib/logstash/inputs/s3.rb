@@ -105,6 +105,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
 
     FileUtils.mkdir_p(@temporary_directory) unless Dir.exist?(@temporary_directory)
+
+    if !@watch_for_new_files && original_params.include?('interval')
+      logger.warn("`watch_for_new_files` has been disabled; `interval` directive will be ignored.")
+    end
   end
 
   public
