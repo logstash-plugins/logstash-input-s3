@@ -1,3 +1,6 @@
+## UNRELEASED(MINOR)
+ - Added `watch_for_new_files` option, enabling single-batch imports [#159](https://github.com/logstash-plugins/logstash-input-s3/pull/159)
+
 ## 3.3.7
   - Added ability to optionally include S3 object properties inside @metadata [#155](https://github.com/logstash-plugins/logstash-input-s3/pull/155)
 
