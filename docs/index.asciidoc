@@ -26,6 +26,8 @@ Stream events from files from a S3 bucket.
 Each line from each file generates an event.
 Files ending in `.gz` are handled as gzip'ed files.
 
+Files that are archived to AWS Glacier will be skipped.
+
 [id="plugins-{type}s-{plugin}-options"]
 ==== S3 Input Configuration Options
 
