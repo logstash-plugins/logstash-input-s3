@@ -1,4 +1,5 @@
-## UNRELEASED(MINOR)
+## Unreleased
+ - Skips objects that are archived to AWS Glacier with a helpful log message (previously they would log as matched, but then fail to load events) [#160](https://github.com/logstash-plugins/logstash-input-s3/pull/160)
  - Added `watch_for_new_files` option, enabling single-batch imports [#159](https://github.com/logstash-plugins/logstash-input-s3/pull/159)
 
 ## 3.3.7
