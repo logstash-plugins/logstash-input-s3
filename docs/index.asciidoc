@@ -57,7 +57,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-session_token>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-sincedb_path>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-temporary_directory>> |<<string,string>>|No
-| <<plugins-{type}s-{plugin}-watch_for_new_files>> | <boolean,boolean>|No
+| <<plugins-{type}s-{plugin}-watch_for_new_files>> |<<boolean,boolean>>|No
 |=======================================================================
 
 Also see <<plugins-{type}s-{plugin}-common-options>> for a list of options supported by all
