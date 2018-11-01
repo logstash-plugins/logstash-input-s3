@@ -26,6 +26,8 @@ Stream events from files from a S3 bucket.
 Each line from each file generates an event.
 Files ending in `.gz` are handled as gzip'ed files.
 
+Files that are archived to AWS Glacier will be skipped.
+
 [id="plugins-{type}s-{plugin}-options"]
 ==== S3 Input Configuration Options
 
@@ -44,6 +46,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-delete>> |<<boolean,boolean>>|No
 | <<plugins-{type}s-{plugin}-endpoint>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-exclude_pattern>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-include_object_properties>> |<<boolean,boolean>>|No
 | <<plugins-{type}s-{plugin}-interval>> |<<number,number>>|No
 | <<plugins-{type}s-{plugin}-prefix>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-proxy_uri>> |<<string,string>>|No
@@ -54,6 +57,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-session_token>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-sincedb_path>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-temporary_directory>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-watch_for_new_files>> |<<boolean,boolean>>|No
 |=======================================================================
 
 Also see <<plugins-{type}s-{plugin}-common-options>> for a list of options supported by all
@@ -166,15 +170,24 @@ the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/ap
 [source,ruby]
     input {
       s3 {
-        "access_key_id" => "1234",
-        "secret_access_key" => "secret",
-        "bucket" => "logstash-test",
+        "access_key_id" => "1234"
+        "secret_access_key" => "secret"
+        "bucket" => "logstash-test"
         "additional_settings" => {
-          "force_path_style" => true,
+          "force_path_style" => true
           "follow_redirects" => false
         }
       }
     }
+
+[id="plugins-{type}s-{plugin}-include_object_properties"]
+===== `include_object_properties`
+
+  * Value type is <<boolean,boolean>>
+  * Default value is `false`
+
+Whether or not to include the S3 object's properties (last_modified, content_type, metadata) into each Event at
+`[@metadata][s3]`. Regardless of this setting, `[@metdata][s3][key]` will always be present.
 
 [id="plugins-{type}s-{plugin}-interval"]
 ===== `interval` 
@@ -263,7 +276,14 @@ If specified, this setting must be a filename path and not just a directory.
 
 Set the directory where logstash will store the tmp files before processing them.
 
+[id="plugins-{type}s-{plugin}-watch_for_new_files"]
+===== `watch_for_new_files`
 
+  * Value type is <<boolean,boolean>>
+  * Default value is `true`
+
+Whether or not to watch for new files.
+Disabling this option causes the input to close itself after processing the files from a single listing.
 
 [id="plugins-{type}s-{plugin}-common-options"]
 include::{include_path}/{type}.asciidoc[]

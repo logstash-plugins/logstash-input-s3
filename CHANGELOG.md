@@ -1,3 +1,25 @@
+## 3.4.1
+ - Fixed link formatting for input type (documentation)
+
+## 3.4.0
+ - Skips objects that are archived to AWS Glacier with a helpful log message (previously they would log as matched, but then fail to load events) [#160](https://github.com/logstash-plugins/logstash-input-s3/pull/160)
+ - Added `watch_for_new_files` option, enabling single-batch imports [#159](https://github.com/logstash-plugins/logstash-input-s3/pull/159)
+
+## 3.3.7
+  - Added ability to optionally include S3 object properties inside @metadata [#155](https://github.com/logstash-plugins/logstash-input-s3/pull/155)
+
+## 3.3.6
+  - Fixed error in documentation by removing illegal commas [#154](https://github.com/logstash-plugins/logstash-input-s3/pull/154)
+
+## 3.3.5
+  - [#136](https://github.com/logstash-plugins/logstash-input-s3/pull/136) Avoid plugin crashes when encountering 'bad' files in S3 buckets
+
+## 3.3.4
+  - Log entry when bucket is empty #150
+
+## 3.3.3
+  - Symbolize hash keys for additional_settings hash #148
+
 ## 3.3.2
   - Docs: Set the default_codec doc attribute.
 
