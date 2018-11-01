@@ -84,12 +84,21 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Value is in seconds.
   config :interval, :validate => :number, :default => 60
 
+  # Whether to watch for new files with the interval. 
+  # If false, overrides any interval and only lists the s3 bucket once.
+  config :watch_for_new_files, :validate => :boolean, :default => true
+
   # Ruby style regexp of keys to exclude from the bucket
   config :exclude_pattern, :validate => :string, :default => nil
 
   # Set the directory where logstash will store the tmp files before processing them.
   # default to the current OS temporary directory in linux /tmp/logstash
   config :temporary_directory, :validate => :string, :default => File.join(Dir.tmpdir, "logstash")
+
+  # Whether or not to include the S3 object's properties (last_modified, content_type, metadata)
+  # into each Event at [@metadata][s3]. Regardless of this setting, [@metdata][s3][key] will always
+  # be present.
+  config :include_object_properties, :validate => :boolean, :default => false
 
   public
   def register
@@ -117,6 +126,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
 
     FileUtils.mkdir_p(@temporary_directory) unless Dir.exist?(@temporary_directory)
+
+    if !@watch_for_new_files && original_params.include?('interval')
+      logger.warn("`watch_for_new_files` has been disabled; `interval` directive will be ignored.")
+    end
   end
 
   public
@@ -124,24 +137,33 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     @current_thread = Thread.current
     Stud.interval(@interval) do
       process_files(queue)
+      stop unless @watch_for_new_files
     end
   end # def run
 
   public
   def list_new_files
     objects = {}
-
+    found = false
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
+        found = true
         @logger.debug("S3 input: Found key", :key => log.key)
-        unless ignore_filename?(log.key)
-          if sincedb.newer?(log.last_modified) && log.content_length > 0
-            objects[log.key] = log.last_modified
-            @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-            @logger.debug("objects[] length is: ", :length => objects.length)
-          end
+        if ignore_filename?(log.key)
+          @logger.debug('S3 input: Ignoring', :key => log.key)
+        elsif log.content_length <= 0
+          @logger.debug('S3 Input: Object Zero Length', :key => log.key)
+        elsif !sincedb.newer?(log.last_modified)
+          @logger.debug('S3 Input: Object Not Modified', :key => log.key)
+        elsif log.storage_class.start_with?('GLACIER')
+          @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
+        else
+          objects[log.key] = log.last_modified
+          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
+          @logger.debug("objects[] length is: ", :length => objects.length)
         end
       end
+      @logger.info('S3 input: No files found in bucket', :prefix => prefix) unless found
     rescue Aws::Errors::ServiceError => e
       @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
     end
@@ -196,8 +218,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   #
   # @param [Queue] Where to push the event
   # @param [String] Which file to read from
+  # @param [S3Object] Source s3 object
   # @return [Boolean] True if the file was completely read, false otherwise.
-  def process_local_log(queue, filename, key)
+  def process_local_log(queue, filename, object)
     @logger.debug('Processing file', :filename => filename)
     metadata = {}
     # Currently codecs operates on bytes instead of stream.
@@ -228,7 +251,13 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
           event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
-          event.set("[@metadata][s3]", { "key" => key })
+          if @include_object_properties
+            event.set("[@metadata][s3]", object.data.to_h)
+          else
+            event.set("[@metadata][s3]", {})
+          end
+
+          event.set("[@metadata][s3][key]", object.key)
 
           queue << event
         end
@@ -279,6 +308,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     else
       read_plain_file(filename, block)
     end
+  rescue => e
+    # skip any broken file
+    @logger.error("Failed to read the file. Skip processing.", :filename => filename, :exception => e.message)
   end
 
   def read_plain_file(filename, block)
@@ -297,9 +329,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     while (line = buffered.readLine())
       block.call(line)
     end
-  rescue ZipException => e
-    @logger.error("Gzip codec: We cannot uncompress the gzip file", :filename => filename)
-    raise e
   ensure
     buffered.close unless buffered.nil?
     decoder.close unless decoder.nil?
@@ -346,6 +375,16 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     path
   end
 
+  def symbolized_settings
+    @symbolized_settings ||= symbolize(@additional_settings)
+  end
+
+  def symbolize(hash)
+    return hash unless hash.is_a?(Hash)
+    symbolized = {}
+    hash.each { |key, value| symbolized[key.to_sym] = symbolize(value) }
+    symbolized
+  end
 
   private
   def old_sincedb_file
@@ -374,7 +413,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     filename = File.join(temporary_directory, File.basename(key))
     if download_remote_file(object, filename)
-      if process_local_log(queue, filename, key)
+      if process_local_log(queue, filename, object)
         lastmod = object.last_modified
         backup_to_bucket(object)
         backup_to_dir(filename)
@@ -417,7 +456,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def get_s3object
-    options = @additional_settings.merge(aws_options_hash || {})
+    options = symbolized_settings.merge(aws_options_hash || {})
     s3 = Aws::S3::Resource.new(options)
   end
 
