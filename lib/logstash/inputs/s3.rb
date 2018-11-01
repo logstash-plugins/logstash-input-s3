@@ -462,12 +462,18 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def backup_options
-    {
-      :acl => @backup_canned_acl,
-      :server_side_encryption => @backup_server_side_encryption ? @backup_server_side_encryption_algorithm : nil,
-      :ssekms_key_id => @backup_server_side_encryption_algorithm == "aws:kms" ? @backup_ssekms_key_id : nil,
-      :storage_class => @backup_storage_class
-    }
+    options = {}
+    options[:acl] = @backup_canned_acl if @backup_canned_acl
+    options[:storage_class] = @backup_storage_class if @backup_storage_class
+
+    if @backup_server_side_encryption
+      options[:server_side_encryption] = @backup_server_side_encryption_algorithm
+      if @backup_server_side_encryption_algorithm == "aws:kms" and !@backup_ssekms_key_id.nil?
+        options[:ssekms_key_id] = @backup_ssekms_key_id
+      end
+    end
+
+    options
   end
 
   private
