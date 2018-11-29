@@ -1,3 +1,6 @@
+## Unreleased
+ - Added `gzip_pattern` option, enabling more flexible determination of whether a file is gzipped [#165](https://github.com/logstash-plugins/logstash-input-s3/issues/165)
+
 ## 3.4.1
  - Fixed link formatting for input type (documentation)
 

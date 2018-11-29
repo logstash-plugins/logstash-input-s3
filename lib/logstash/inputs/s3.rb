@@ -79,6 +79,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
+  # Regular expression used to determine whether an input file is in gzip format.
+  # default to an expression that matches *.gz and *.gzip file extensions
+  config :gzip_pattern, :validate => :string, :default => "\.gz(ip)?$"
+
   public
   def register
     require "fileutils"
@@ -315,7 +319,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def gzip?(filename)
-    filename.end_with?('.gz','.gzip')
+    Regexp.new(@gzip_pattern).match(filename)
   end
   
   private
