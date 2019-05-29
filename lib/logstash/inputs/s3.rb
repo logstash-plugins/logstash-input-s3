@@ -242,6 +242,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
     # #ensure any stateful codecs (such as multi-line ) are flushed to the queue
     @codec.flush do |event|
+      decorate(event)
       queue << event
     end
 
