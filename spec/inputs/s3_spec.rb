@@ -229,6 +229,21 @@ describe LogStash::Inputs::S3 do
         expect(plugin.list_new_files).to eq([present_object.key])
     end
 
+    it 'should ignore file if the file does not match the suffix' do
+      suffix = '.log.gz'
+
+      objects_list = [
+        double(:key => 'file.log.gz', :last_modified => Time.now, :content_length => 5, :storage_class => 'STANDARD'),
+        present_object
+      ]
+
+      allow_any_instance_of(Aws::S3::Bucket).to receive(:objects).with(:suffix => suffix) { objects_list }
+
+      plugin = LogStash::Inputs::S3.new(config.merge({ 'suffix' => suffix }))
+      plugin.register
+      expect(plugin.list_new_files).to eq([objects_list[0]])
+  end
+
     it 'should sort return object sorted by last_modification date with older first' do
       objects = [
         double(:key => 'YESTERDAY', :last_modified => Time.now - day, :content_length => 5, :storage_class => 'STANDARD'),

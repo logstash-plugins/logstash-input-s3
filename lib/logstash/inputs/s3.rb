@@ -35,6 +35,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
 
+  # If specified, the suffix of filenames in the bucket must match (not a regexp)
+  config :suffix, :validate => :string, :default => nil
+
   config :additional_settings, :validate => :hash, :default => {}
 
   # The path to use for writing state. The state stored by this plugin is
@@ -142,7 +145,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug("objects[] length is: ", :length => objects.length)
         end
       end
-      @logger.info('S3 input: No files found in bucket', :prefix => prefix) unless found
+      @logger.info('S3 input: No files found in bucket', :prefix => prefix, :suffix => suffix) unless found
     rescue Aws::Errors::ServiceError => e
       @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
     end
@@ -378,6 +381,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     elsif @exclude_pattern.nil?
       return false
     elsif filename =~ Regexp.new(@exclude_pattern)
+      return true
+    elsif !@suffix.nil? && !filename.end_with?(@suffix)
       return true
     else
       return false
