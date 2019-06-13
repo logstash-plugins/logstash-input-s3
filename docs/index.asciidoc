@@ -198,6 +198,17 @@ Whether or not to include the S3 object's properties (last_modified, content_typ
 Interval to wait between to check the file list again after a run is finished.
 Value is in seconds.
 
+[id="plugins-{type}s-{plugin}-max_file_age"]
+===== `max_file_age`
+
+  * Value type is <<number,number>>
+  * Default value is `0`
+
+Maximum age (in days) of files to consider. You can use this if your bucket has
+many old files with irrelevant data (for example, old log files when you only want
+to ingest recent data).
+Value is in days. A value of `0` means to consider all files.
+
 [id="plugins-{type}s-{plugin}-prefix"]
 ===== `prefix` 
 

@@ -79,6 +79,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
+  config :max_file_age_days, :validate => :number, :default => 0
+
   public
   def register
     require "fileutils"
@@ -124,6 +126,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def list_new_files
     objects = {}
     found = false
+    oldest_file_age = Time.now - @max_file_age_days.day
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
@@ -136,6 +139,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('S3 Input: Object Not Modified', :key => log.key)
         elsif log.storage_class.start_with?('GLACIER')
           @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
+        elsif @max_file_age_days > 0 && oldest_file_age > log.last_modified
+          @logger.debug("S3 Input: Object modified more than max_file_age_days ago", :key => log.key)
         else
           objects[log.key] = log.last_modified
           @logger.debug("S3 input: Adding to objects[]", :key => log.key)
