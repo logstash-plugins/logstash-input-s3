@@ -116,6 +116,7 @@ describe LogStash::Inputs::S3 do
 
     let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now, :content_length => 10, :storage_class => 'STANDARD') }
     let!(:archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER') }
+    let!(:deep_archived_object) {double(:key => 'this-should-also-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'DEEP_ARCHIVE') }
     let(:objects_list) {
       [
         double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day, :content_length => 100, :storage_class => 'STANDARD'),
@@ -134,6 +135,7 @@ describe LogStash::Inputs::S3 do
       expect(files).to_not include('exclude-this-file-1') # matches exclude pattern
       expect(files).to_not include('exclude/logstash')    # matches exclude pattern
       expect(files).to_not include(archived_object.key)   # archived
+      expect(files).to_not include(deep_archived_object.key) # archived
       expect(files.size).to eq(1)
     end
 
