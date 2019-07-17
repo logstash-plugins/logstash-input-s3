@@ -79,6 +79,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
+  # Pass boolean to see if the source file may not have the .gz extension but is actually zipped.
+  config :is_gzipped, :validate => :boolean, :default => false
+
   public
   def register
     require "fileutils"
@@ -315,7 +318,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def gzip?(filename)
-    filename.end_with?('.gz','.gzip')
+    filename.end_with?('.gz','.gzip') or @is_gzipped
   end
   
   private
