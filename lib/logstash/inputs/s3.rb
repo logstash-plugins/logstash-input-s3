@@ -79,6 +79,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
+  # Whether to only input those files that have been modified or added after 
+  # the logstash config has started. 
+  config :new_files_only, :validate => :boolean, :default => false
+
   public
   def register
     require "fileutils"
@@ -114,6 +118,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   public
   def run(queue)
     @current_thread = Thread.current
+    if @new_files_only
+      list_new_files # creates list of initial files already in bucket
+    end
     Stud.interval(@interval) do
       process_files(queue)
       stop unless @watch_for_new_files
