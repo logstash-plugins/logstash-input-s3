@@ -428,6 +428,13 @@ describe LogStash::Inputs::S3 do
       include_examples "generated events"
     end
 
+    context 'force gzip decoding' do
+      let(:config) { super().merge('decode_gzip' => 'force') }
+      let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gz') }
+
+      include_examples "generated events"
+    end
+
     context 'compressed with gzip extension' do
       let(:log) { double(:key => 'log.gz', :last_modified => Time.now - 2 * day, :content_length => 5, :storage_class => 'STANDARD') }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gzip') }

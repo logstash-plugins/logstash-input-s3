@@ -140,6 +140,18 @@ The name of the S3 bucket.
 
 Whether to delete processed files from the original bucket.
 
+[id="plugins-{type}s-{plugin}-decode_gzip"]
+==== `decode_gzip`
+
+  * Value type is <<string,string>>
+  * Acceptable values are `detect` and `force`
+  * Default value is `detect`
+
+Controls behaviour for performing gzip-decoding on files.
+
+  * `detect` will perform gzip-decoding on files with matching extensions (`.gz` and `.gzip`)
+  * `force` will perform gzip-decoding on all files, regardless of extension or contents.
+
 [id="plugins-{type}s-{plugin}-endpoint"]
 ===== `endpoint`
 

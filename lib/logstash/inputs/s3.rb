@@ -79,6 +79,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
+  # Controls which files are handled as gzip.
+  config :decode_gzip, :validate => %w(detect force), :default => 'detect'
+
   public
   def register
     require "fileutils"
@@ -109,6 +112,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     if !@watch_for_new_files && original_params.include?('interval')
       logger.warn("`watch_for_new_files` has been disabled; `interval` directive will be ignored.")
     end
+
+    @gzip_detector = case @decode_gzip
+                     when "force"  then -> (_) { true }
+                     when "detect" then -> (filename) { filename.end_with?('.gz','.gzip') }
+                     else fail(LogStash::ConfigurationError, "unsupported value `#{@decode_gzip}` for decode_gzip")
+                     end
   end
 
   public
@@ -315,7 +324,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def gzip?(filename)
-    filename.end_with?('.gz','.gzip')
+    @gzip_detector.call(filename)
   end
   
   private
