@@ -84,7 +84,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Value is in seconds.
   config :interval, :validate => :number, :default => 60
 
-  # Whether to watch for new files with the interval. 
+  # Whether to watch for new files with the interval.
   # If false, overrides any interval and only lists the s3 bucket once.
   config :watch_for_new_files, :validate => :boolean, :default => true
 
