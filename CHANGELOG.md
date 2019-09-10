@@ -1,3 +1,6 @@
+## 3.5.0
+ - Added ability to force gzip-decoding regardless of filename with `decode_gzip => force`
+
 ## 3.4.1
  - Fixed link formatting for input type (documentation)
 
