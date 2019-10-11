@@ -146,7 +146,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     rescue Aws::Errors::ServiceError => e
       @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
     end
-    objects.keys.sort {|a,b| objects[a] <=> objects[b]}
+    objects.keys.shuffle {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
 
   public
