@@ -79,6 +79,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
+  # Whether to sort the files before processing them or not.
+  # Set this value to false if you want to run multiple Logstash
+  # instances on the same bucket.
+  config :sort_processed_files, :validate => :boolean, :default => true
+
   public
   def register
     require "fileutils"
@@ -146,7 +151,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     rescue Aws::Errors::ServiceError => e
       @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
     end
-    objects.keys.shuffle {|a,b| objects[a] <=> objects[b]}
+    if @sort_processed_files
+      objects.keys.sort {|a,b| objects[a] <=> objects[b]}
+    else
+      objects.keys.shuffle {|a,b| objects[a] <=> objects[b]}
+    end
   end # def fetch_new_files
 
   public
@@ -391,17 +400,19 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     filename = File.join(temporary_directory, File.basename(key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        file_exists = false
         begin
+          # Remote object related operations will fail if it is (re)moved
+          # from the bucket (e.g processed by another instance of Logstash).
           lastmod = object.last_modified
-          file_exists = true
+          backup_to_bucket(object)
+          delete_file_from_bucket(object)
+          backup_to_dir(filename)
         rescue
           @logger.warn("S3 input: Remote file not available anymore", :remote_key => key)
         end
-        if file_exists
-          backup_to_bucket(object)
-          backup_to_dir(filename)
-          delete_file_from_bucket(object)
+        if @sort_processed_files
+          # Keeping track of the processed files only makes sense
+          # if they were processed in a chronological order.
           sincedb.write(lastmod)
         end
         FileUtils.remove_entry_secure(filename, true)
