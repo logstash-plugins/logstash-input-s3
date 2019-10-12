@@ -80,8 +80,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config :include_object_properties, :validate => :boolean, :default => false
 
   # Whether to sort the files before processing them or not.
-  # Set this value to false if you want to run multiple Logstash
-  # instances on the same bucket.
+  #
+  # Set this value to false if you want to run multiple Logstash instances on the same bucket.
   config :sort_processed_files, :validate => :boolean, :default => true
 
   public
@@ -410,12 +410,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         rescue
           @logger.warn("S3 input: Remote file not available anymore", :remote_key => key)
         end
+        FileUtils.remove_entry_secure(filename, true)
         if @sort_processed_files
           # Keeping track of the processed files only makes sense
           # if they were processed in a chronological order.
           sincedb.write(lastmod)
         end
-        FileUtils.remove_entry_secure(filename, true)
       end
     else
       FileUtils.remove_entry_secure(filename, true)
