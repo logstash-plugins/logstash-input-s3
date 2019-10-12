@@ -391,12 +391,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     filename = File.join(temporary_directory, File.basename(key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        lastmod = object.last_modified
-        backup_to_bucket(object)
-        backup_to_dir(filename)
-        delete_file_from_bucket(object)
+        file_exists = false
+        begin
+          lastmod = object.last_modified
+          file_exists = true
+        rescue
+          @logger.warn("S3 input: Remote file not available anymore", :remote_key => key)
+        end
+        if file_exists
+          backup_to_bucket(object)
+          backup_to_dir(filename)
+          delete_file_from_bucket(object)
+          sincedb.write(lastmod)
+        end
         FileUtils.remove_entry_secure(filename, true)
-        sincedb.write(lastmod)
       end
     else
       FileUtils.remove_entry_secure(filename, true)
