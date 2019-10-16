@@ -168,6 +168,26 @@ describe LogStash::Inputs::S3 do
       end
     end
 
+    context 'when ancient files are excluded' do
+      let(:objects_list) {
+        [
+          present_object,
+          double(:key => 'ancient-file', :last_modification => Time.now - 8 * day, :content_length => 10, :storage_class => 'STANDARD'),
+        ]
+      }
+
+      it 'should exclude ancient files' do
+        plugin = LogStash::Inputs::S3.new(config.merge({ "max_file_age_days" => 7 }))
+        plugin.register
+        allow(plugin.logger).to receive(:debug).with(anything, anything)
+
+        expect(plugin.logger).not_to receive(:info).with(/No files found/, anything)
+        expect(plugin.logger).to receive(:debug).with(/Object modified more than max_file_age_days ago/, anything)
+        expect(files).to include(present_object.key)
+        expect(files).to_not include(ancient_object.key)
+      end
+    end
+
     context 'with an empty bucket' do
       let(:objects_list) { [] }
 
