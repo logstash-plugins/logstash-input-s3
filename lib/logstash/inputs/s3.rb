@@ -139,8 +139,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('S3 Input: Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
           @logger.debug('S3 Input: Object Not Modified', :key => log.key)
-	      elsif log.last_modified > cutoff_time
-	        @logger.debug('S3 Input: Object Too Recent', :key => log.key)
+        elsif log.last_modified > cutoff_time
+          @logger.debug('S3 Input: Object Too Recent', :key => log.key)
         elsif log.storage_class.start_with?('GLACIER')
           @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
         else
