@@ -189,6 +189,40 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     Stud.stop!(@current_thread)
   end
 
+  # Initialise an event with its s3 key and other metadata
+  #
+  # @param [object] Source s3 object
+  # @param [event] event to be initialised
+  private
+  def init_event(object, metadata, event)
+    # We are making an assumption concerning cloudfront
+    # log format, the user will use the plain or the line codec
+    # and the message key will represent the actual line content.
+    # If the event is only metadata the event will be drop.
+    # This was the behavior of the pre 1.5 plugin.
+    #
+    # The line need to go through the codecs to replace
+    # unknown bytes in the log stream before doing a regexp match or
+    # you will get a `Error: invalid byte sequence in UTF-8'
+    if event_is_metadata?(event)
+      @logger.debug('Event is metadata, updating the current cloudfront metadata', :event => event)
+      update_metadata(metadata, event)
+    else
+      decorate(event)
+
+      event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
+      event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
+
+      if @include_object_properties
+        event.set("[@metadata][s3]", object.data.to_h)
+      else
+        event.set("[@metadata][s3]", {})
+      end
+
+      event.set("[@metadata][s3][key]", object.key)
+    end
+  end
+
   private
 
   # Read the content of the local file
@@ -210,38 +244,13 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       end
 
       @codec.decode(line) do |event|
-        # We are making an assumption concerning cloudfront
-        # log format, the user will use the plain or the line codec
-        # and the message key will represent the actual line content.
-        # If the event is only metadata the event will be drop.
-        # This was the behavior of the pre 1.5 plugin.
-        #
-        # The line need to go through the codecs to replace
-        # unknown bytes in the log stream before doing a regexp match or
-        # you will get a `Error: invalid byte sequence in UTF-8'
-        if event_is_metadata?(event)
-          @logger.debug('Event is metadata, updating the current cloudfront metadata', :event => event)
-          update_metadata(metadata, event)
-        else
-          decorate(event)
-
-          event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
-          event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
-
-          if @include_object_properties
-            event.set("[@metadata][s3]", object.data.to_h)
-          else
-            event.set("[@metadata][s3]", {})
-          end
-
-          event.set("[@metadata][s3][key]", object.key)
-
-          queue << event
-        end
+        init_event(object, metadata, event)
+        queue << event
       end
     end
     # #ensure any stateful codecs (such as multi-line ) are flushed to the queue
     @codec.flush do |event|
+      init_event(object, metadata, event)
       queue << event
     end
 
