@@ -192,6 +192,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Initialise an event with its s3 key and other metadata
   #
   # @param [object] Source s3 object
+  # @param [metadata] hashmap for object's metadata
   # @param [event] event to be initialised
   private
   def init_event(object, metadata, event)
@@ -250,6 +251,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
     # #ensure any stateful codecs (such as multi-line ) are flushed to the queue
     @codec.flush do |event|
+      # these events also need initialisation
       init_event(object, metadata, event)
       queue << event
     end
