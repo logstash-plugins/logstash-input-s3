@@ -78,6 +78,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # into each Event at [@metadata][s3]. Regardless of this setting, [@metdata][s3][key] will always
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
+  
+  # When this setting is enabled, the date stored in sincedb is not used to determine whether a file should be processed.
+  # This setting is particularly useful when you are moving/deleting files after initial processing.
+  config :sincedb_disabled, :validate => :boolean, :default => false
 
   public
   def register
@@ -132,7 +136,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('S3 input: Ignoring', :key => log.key)
         elsif log.content_length <= 0
           @logger.debug('S3 Input: Object Zero Length', :key => log.key)
-        elsif !sincedb.newer?(log.last_modified)
+        elsif !@sincedb_disabled && !sincedb.newer?(log.last_modified)
           @logger.debug('S3 Input: Object Not Modified', :key => log.key)
         elsif log.storage_class.start_with?('GLACIER')
           @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)

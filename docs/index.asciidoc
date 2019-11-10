@@ -56,6 +56,7 @@ This plugin supports the following configuration options plus the <<plugins-{typ
 | <<plugins-{type}s-{plugin}-secret_access_key>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-session_token>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-sincedb_path>> |<<string,string>>|No
+| <<plugins-{type}s-{plugin}-sincedb_disabled>> |<<boolean,boolean>>|No
 | <<plugins-{type}s-{plugin}-temporary_directory>> |<<string,string>>|No
 | <<plugins-{type}s-{plugin}-watch_for_new_files>> |<<boolean,boolean>>|No
 |=======================================================================
@@ -267,6 +268,16 @@ the last handled file was added to S3). The default will write
 sincedb files to in the directory '{path.data}/plugins/inputs/s3/'
 
 If specified, this setting must be a filename path and not just a directory.
+
+[id="plugins-{type}s-{plugin}-sincedb_disabled"]
+===== `sincedb_disabled` 
+
+  * Value type is <<boolean,boolean>>
+  * Default value is `false`
+
+When this setting is set to true, the date stored in sincedb is not used to 
+determine whether a file should be processed. This setting is particularly 
+useful when you are moving/deleting files after initial processing.
 
 [id="plugins-{type}s-{plugin}-temporary_directory"]
 ===== `temporary_directory` 
