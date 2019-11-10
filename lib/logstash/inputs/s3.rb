@@ -113,6 +113,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     if !@watch_for_new_files && original_params.include?('interval')
       logger.warn("`watch_for_new_files` has been disabled; `interval` directive will be ignored.")
     end
+    if @sincedb_disabled
+      logger.warn("`sincedb_disabled` has been set to  `true`; `sincedb` checking will be ignored, if you are not using `delete` this may result in duplicate processing.")
+    end
   end
 
   public
