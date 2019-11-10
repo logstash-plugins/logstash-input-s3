@@ -81,7 +81,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   
   # When this setting is enabled, the date stored in sincedb is not used to determine whether a file should be processed.
   # This setting is particularly useful when you are moving/deleting files after initial processing.
-  config :sincedb_disabled, :validate => :boolean, :default => false
+  config :sincedb_ignore, :validate => :boolean, :default => false
 
   public
   def register
@@ -113,8 +113,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     if !@watch_for_new_files && original_params.include?('interval')
       logger.warn("`watch_for_new_files` has been disabled; `interval` directive will be ignored.")
     end
-    if @sincedb_disabled
-      logger.warn("`sincedb_disabled` has been set to  `true`; `sincedb` checking will be ignored, if you are not using `delete` this may result in duplicate processing.")
+    if @sincedb_ignore
+      logger.warn("`sincedb_ignore` has been set to  `true`; `sincedb` checking will be ignored, if you are not using `delete` this may result in duplicate processing.")
     end
   end
 
@@ -139,7 +139,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('S3 input: Ignoring', :key => log.key)
         elsif log.content_length <= 0
           @logger.debug('S3 Input: Object Zero Length', :key => log.key)
-        elsif !@sincedb_disabled && !sincedb.newer?(log.last_modified)
+        elsif !@sincedb_ignore && !sincedb.newer?(log.last_modified)
           @logger.debug('S3 Input: Object Not Modified', :key => log.key)
         elsif log.storage_class.start_with?('GLACIER')
           @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
