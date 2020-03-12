@@ -187,7 +187,7 @@ the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/ap
   * Default value is `false`
 
 Whether or not to include the S3 object's properties (last_modified, content_type, metadata) into each Event at
-`[@metadata][s3]`. Regardless of this setting, `[@metdata][s3][key]` will always be present.
+`[@metadata][s3]`. Regardless of this setting, `[@metadata][s3][key]` will always be present.
 
 [id="plugins-{type}s-{plugin}-interval"]
 ===== `interval` 
