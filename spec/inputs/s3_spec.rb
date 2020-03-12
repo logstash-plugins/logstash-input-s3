@@ -115,13 +115,18 @@ describe LogStash::Inputs::S3 do
   describe "#list_new_files" do
     before { allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects_list } }
 
-    let!(:present_object) { double(:key => 'this-should-be-present', :last_modified => Time.now, :content_length => 10, :storage_class => 'STANDARD') }
-    let!(:archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER') }
+    let!(:present_object) {double(:key => 'this-should-be-present', :last_modified => Time.now, :content_length => 10, :storage_class => 'STANDARD', :object => double(:data => double(:restore => nil)) ) }
+    let!(:archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => nil)) ) }
+    let!(:deep_archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => nil)) ) }
+    let!(:restored_object) {double(:key => 'this-should-be-restored-from-archive', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => 'ongoing-request="false", expiry-date="Thu, 01 Jan 2099 00:00:00 GMT"')) ) }
+    let!(:deep_restored_object) {double(:key => 'this-should-be-restored-from-deep-archive', :last_modified => Time.now, :content_length => 10, :storage_class => 'DEEP_ARCHIVE', :object => double(:data => double(:restore => 'ongoing-request="false", expiry-date="Thu, 01 Jan 2099 00:00:00 GMT"')) ) }
     let(:objects_list) {
       [
         double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day, :content_length => 100, :storage_class => 'STANDARD'),
         double(:key => 'exclude/logstash', :last_modified => Time.now - 2 * day, :content_length => 50, :storage_class => 'STANDARD'),
         archived_object,
+        restored_object,
+        deep_restored_object,
         present_object
       ]
     }
@@ -132,10 +137,13 @@ describe LogStash::Inputs::S3 do
 
       files = plugin.list_new_files
       expect(files).to include(present_object.key)
+      expect(files).to include(restored_object.key)
+      expect(files).to include(deep_restored_object.key)
       expect(files).to_not include('exclude-this-file-1') # matches exclude pattern
       expect(files).to_not include('exclude/logstash')    # matches exclude pattern
       expect(files).to_not include(archived_object.key)   # archived
-      expect(files.size).to eq(1)
+      expect(files).to_not include(deep_archived_object.key)   # archived
+      expect(files.size).to eq(3)
     end
 
     it 'should support not providing a exclude pattern' do
@@ -144,10 +152,13 @@ describe LogStash::Inputs::S3 do
 
       files = plugin.list_new_files
       expect(files).to include(present_object.key)
+      expect(files).to include(restored_object.key)
+      expect(files).to include(deep_restored_object.key)
       expect(files).to include('exclude-this-file-1')   # no exclude pattern given
       expect(files).to include('exclude/logstash')      # no exclude pattern given
       expect(files).to_not include(archived_object.key) # archived
-      expect(files.size).to eq(3)
+      expect(files).to_not include(deep_archived_object.key)   # archived
+      expect(files.size).to eq(5)
     end
 
     context 'when all files are excluded from a bucket' do
@@ -209,10 +220,13 @@ describe LogStash::Inputs::S3 do
 
       files = plugin.list_new_files
       expect(files).to include(present_object.key)
+      expect(files).to include(restored_object.key)
+      expect(files).to include(deep_restored_object.key)
       expect(files).to_not include('exclude-this-file-1') # too old
       expect(files).to_not include('exclude/logstash')    # too old
       expect(files).to_not include(archived_object.key)   # archived
-      expect(files.size).to eq(1)
+      expect(files).to_not include(deep_archived_object.key) # archived
+      expect(files.size).to eq(3)
     end
 
     it 'should ignore file if the file match the prefix' do
