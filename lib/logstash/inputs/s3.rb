@@ -11,12 +11,6 @@ require "aws-sdk"
 require "logstash/inputs/s3/patch"
 
 require 'java'
-java_import java.io.InputStream
-java_import java.io.InputStreamReader
-java_import java.io.FileInputStream
-java_import java.io.BufferedReader
-java_import java.util.zip.GZIPInputStream
-java_import java.util.zip.ZipException
 
 Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
@@ -24,6 +18,14 @@ Aws.eager_autoload!
 # Each line from each file generates an event.
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
+
+  java_import java.io.InputStream
+  java_import java.io.InputStreamReader
+  java_import java.io.FileInputStream
+  java_import java.io.BufferedReader
+  java_import java.util.zip.GZIPInputStream
+  java_import java.util.zip.ZipException
+
   include LogStash::PluginMixins::AwsConfig::V2
 
   config_name "s3"
@@ -64,7 +66,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Value is in seconds.
   config :interval, :validate => :number, :default => 60
 
-  # Whether to watch for new files with the interval. 
+  # Whether to watch for new files with the interval.
   # If false, overrides any interval and only lists the s3 bucket once.
   config :watch_for_new_files, :validate => :boolean, :default => true
 
@@ -266,7 +268,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -318,9 +320,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     filename.end_with?('.gz','.gzip')
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
