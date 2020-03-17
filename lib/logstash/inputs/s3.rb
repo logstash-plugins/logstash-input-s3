@@ -3,6 +3,7 @@ require "logstash/inputs/base"
 require "logstash/namespace"
 require "logstash/plugin_mixins/aws_config"
 require "time"
+require "date"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
@@ -10,12 +11,6 @@ require "aws-sdk"
 require "logstash/inputs/s3/patch"
 
 require 'java'
-java_import java.io.InputStream
-java_import java.io.InputStreamReader
-java_import java.io.FileInputStream
-java_import java.io.BufferedReader
-java_import java.util.zip.GZIPInputStream
-java_import java.util.zip.ZipException
 
 Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
@@ -23,6 +18,14 @@ Aws.eager_autoload!
 # Each line from each file generates an event.
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
+
+  java_import java.io.InputStream
+  java_import java.io.InputStreamReader
+  java_import java.io.FileInputStream
+  java_import java.io.BufferedReader
+  java_import java.util.zip.GZIPInputStream
+  java_import java.util.zip.ZipException
+
   include LogStash::PluginMixins::AwsConfig::V2
 
   config_name "s3"
@@ -63,7 +66,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # Value is in seconds.
   config :interval, :validate => :number, :default => 60
 
-  # Whether to watch for new files with the interval. 
+  # Whether to watch for new files with the interval.
   # If false, overrides any interval and only lists the s3 bucket once.
   config :watch_for_new_files, :validate => :boolean, :default => true
 
@@ -138,7 +141,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('S3 Input: Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
           @logger.debug('S3 Input: Object Not Modified', :key => log.key)
-        elsif log.storage_class.start_with?('GLACIER')
+        elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
           @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
         else
           objects[log.key] = log.last_modified
@@ -269,7 +272,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     line.start_with?('#Fields: ')
   end
 
-  private 
+  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -321,9 +324,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def gzip?(filename)
     Regexp.new(@gzip_pattern).match(filename)
   end
-  
+
   private
-  def sincedb 
+  def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
@@ -439,6 +442,24 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def get_s3object
     options = symbolized_settings.merge(aws_options_hash || {})
     s3 = Aws::S3::Resource.new(options)
+  end
+
+  private
+  def file_restored?(object)
+    begin
+      restore = object.data.restore
+      if restore && restore.match(/ongoing-request\s?=\s?["']false["']/)
+        if restore = restore.match(/expiry-date\s?=\s?["'](.*?)["']/)
+          expiry_date = DateTime.parse(restore[1])
+          return true if DateTime.now < expiry_date # restored
+        else
+          return nil # no expiry-date found for ongoing request
+        end
+      end
+    rescue => e
+      @logger.debug("Could not determine Glacier restore status.", :exception => e.message)
+    end
+    return false
   end
 
   private
