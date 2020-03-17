@@ -3,6 +3,7 @@ require "logstash/inputs/base"
 require "logstash/namespace"
 require "logstash/plugin_mixins/aws_config"
 require "time"
+require "date"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
@@ -134,7 +135,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('S3 Input: Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
           @logger.debug('S3 Input: Object Not Modified', :key => log.key)
-        elsif log.storage_class.start_with?('GLACIER')
+        elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
           @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
         else
           objects[log.key] = log.last_modified
@@ -435,6 +436,24 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def get_s3object
     options = symbolized_settings.merge(aws_options_hash || {})
     s3 = Aws::S3::Resource.new(options)
+  end
+
+  private
+  def file_restored?(object)
+    begin
+      restore = object.data.restore
+      if restore && restore.match(/ongoing-request\s?=\s?["']false["']/)
+        if restore = restore.match(/expiry-date\s?=\s?["'](.*?)["']/)
+          expiry_date = DateTime.parse(restore[1])
+          return true if DateTime.now < expiry_date # restored
+        else
+          return nil # no expiry-date found for ongoing request
+        end
+      end
+    rescue => e
+      @logger.debug("Could not determine Glacier restore status.", :exception => e.message)
+    end
+    return false
   end
 
   private
