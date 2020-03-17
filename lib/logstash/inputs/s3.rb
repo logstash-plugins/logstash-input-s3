@@ -138,11 +138,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         if ignore_filename?(log.key)
           @logger.debug('S3 input: Ignoring', :key => log.key)
         elsif log.content_length <= 0
-          @logger.debug('S3 Input: Object Zero Length', :key => log.key)
+          @logger.debug('S3 input: Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
-          @logger.debug('S3 Input: Object Not Modified', :key => log.key)
+          @logger.debug('S3 input: Object Not Modified', :key => log.key)
         elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
-          @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
+          @logger.debug('S3 input: Object Archived to Glacier', :key => log.key)
         else
           objects[log.key] = log.last_modified
           @logger.debug("S3 input: Adding to objects[]", :key => log.key)
@@ -151,7 +151,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       end
       @logger.info('S3 input: No files found in bucket', :prefix => prefix) unless found
     rescue Aws::Errors::ServiceError => e
-      @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
+      @logger.error("S3 input: Unable to list objects in bucket", :exception => e.class, :message => e.message, :backtrace => e.backtrace, :prefix => prefix)
     end
     objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
@@ -182,7 +182,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       if stop?
         break
       else
-        @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
+        @logger.debug("S3 input: processing", :bucket => @bucket, :key => key)
         process_log(queue, key)
       end
     end
@@ -294,7 +294,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   rescue => e
     # skip any broken file
-    @logger.error("Failed to read the file. Skip processing.", :filename => filename, :exception => e.message)
+    @logger.error("Failed to read the file. Skip processing.", :exception => e.class, :message => e.message, :filename => filename)
   end
 
   def read_plain_file(filename, block)
@@ -331,8 +331,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
                   else
-                    @logger.info("Using the provided sincedb_path",
-                                 :sincedb_path => @sincedb_path)
+                    @logger.info("Using the provided sincedb_path", :sincedb_path => @sincedb_path)
                     SinceDB::File.new(@sincedb_path)
                   end
   end
@@ -425,7 +424,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         remote_object.get(:response_target => s3file)
         completed = true
       rescue Aws::Errors::ServiceError => e
-        @logger.warn("S3 input: Unable to download remote file", :remote_key => remote_object.key, :message => e.message)
+        @logger.warn("S3 input: Unable to download remote file", :exception => e.class, :message => e.message, :remote_key => remote_object.key)
       end
     end
     completed
@@ -457,7 +456,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         end
       end
     rescue => e
-      @logger.debug("Could not determine Glacier restore status.", :exception => e.message)
+      @logger.debug("Could not determine Glacier restore status.", :exception => e.class, :message => e.message)
     end
     return false
   end
