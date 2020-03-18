@@ -86,7 +86,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to an expression that matches *.gz and *.gzip file extensions
   config :gzip_pattern, :validate => :string, :default => "\.gz(ip)?$"
 
-  public
   def register
     require "fileutils"
     require "digest/md5"
@@ -118,7 +117,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  public
   def run(queue)
     @current_thread = Thread.current
     Stud.interval(@interval) do
@@ -127,7 +125,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def run
 
-  public
   def list_new_files
     objects = {}
     found = false
@@ -155,7 +152,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
 
-  public
   def backup_to_bucket(object)
     unless @backup_to_bucket.nil?
       backup_key = "#{@backup_add_prefix}#{object.key}"
@@ -166,14 +162,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  public
   def backup_to_dir(filename)
     unless @backup_to_dir.nil?
       FileUtils.cp(filename, @backup_to_dir)
     end
   end
 
-  public
   def process_files(queue)
     objects = list_new_files
 
@@ -186,7 +180,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def process_files
 
-  public
   def stop
     # @current_thread is initialized in the `#run` method,
     # this variable is needed because the `#stop` is a called in another thread
@@ -253,24 +246,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     return true
   end # def process_local_log
 
-  private
   def event_is_metadata?(event)
     return false unless event.get("message").class == String
     line = event.get("message")
     version_metadata?(line) || fields_metadata?(line)
   end
 
-  private
   def version_metadata?(line)
     line.start_with?('#Version: ')
   end
 
-  private
   def fields_metadata?(line)
     line.start_with?('#Fields: ')
   end
 
-  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -283,7 +272,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   def read_file(filename, &block)
     if gzip?(filename)
       read_gzip_file(filename, block)
@@ -301,7 +289,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   def read_gzip_file(filename, block)
     file_stream = FileInputStream.new(filename)
     gzip_stream = GZIPInputStream.new(file_stream)
@@ -318,12 +305,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     file_stream.close unless file_stream.nil?
   end
 
-  private
   def gzip?(filename)
     Regexp.new(@gzip_pattern).match(filename)
   end
 
-  private
   def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
@@ -334,7 +319,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
                   end
   end
 
-  private
   def sincedb_file
     digest = Digest::MD5.hexdigest("#{@bucket}+#{@prefix}")
     dir = File.join(LogStash::SETTINGS.get_value("path.data"), "plugins", "inputs", "s3")
@@ -367,11 +351,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     symbolized
   end
 
-  private
-  def old_sincedb_file
-  end
-
-  private
   def ignore_filename?(filename)
     if @prefix == filename
       return true
@@ -388,7 +367,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   def process_log(queue, key)
     @logger.debug("Processing", :bucket => @bucket, :key => key)
     object = @s3bucket.object(key)
@@ -408,7 +386,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   # Stream the remove file to the local disk
   #
   # @param [S3Object] Reference to the remove S3 objec to download
@@ -429,20 +406,17 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     completed
   end
 
-  private
   def delete_file_from_bucket(object)
     if @delete and @backup_to_bucket.nil?
       object.delete()
     end
   end
 
-  private
   def get_s3object
     options = symbolized_settings.merge(aws_options_hash || {})
     s3 = Aws::S3::Resource.new(options)
   end
 
-  private
   def file_restored?(object)
     begin
       restore = object.data.restore
@@ -460,7 +434,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     return false
   end
 
-  private
   module SinceDB
     class File
       def initialize(file)
