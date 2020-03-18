@@ -92,7 +92,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     require "digest/md5"
     require "aws-sdk-resources"
 
-    @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
+    @logger.info("Registering", :bucket => @bucket, :region => @region)
 
     s3 = get_s3object
 
@@ -134,24 +134,23 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
-        @logger.debug("S3 input: Found key", :key => log.key)
+        @logger.debug('Found key', :key => log.key)
         if ignore_filename?(log.key)
-          @logger.debug('S3 input: Ignoring', :key => log.key)
+          @logger.debug('Ignoring', :key => log.key)
         elsif log.content_length <= 0
-          @logger.debug('S3 input: Object Zero Length', :key => log.key)
+          @logger.debug('Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
-          @logger.debug('S3 input: Object Not Modified', :key => log.key)
+          @logger.debug('Object Not Modified', :key => log.key)
         elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
-          @logger.debug('S3 input: Object Archived to Glacier', :key => log.key)
+          @logger.debug('Object Archived to Glacier', :key => log.key)
         else
           objects[log.key] = log.last_modified
-          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-          @logger.debug("objects[] length is: ", :length => objects.length)
+          @logger.debug("Added to objects[]", :key => log.key, :length => objects.length)
         end
       end
-      @logger.info('S3 input: No files found in bucket', :prefix => prefix) unless found
+      @logger.info('No files found in bucket', :prefix => prefix) unless found
     rescue Aws::Errors::ServiceError => e
-      @logger.error("S3 input: Unable to list objects in bucket", :exception => e.class, :message => e.message, :backtrace => e.backtrace, :prefix => prefix)
+      @logger.error("Unable to list objects in bucket", :exception => e.class, :message => e.message, :backtrace => e.backtrace, :prefix => prefix)
     end
     objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
@@ -182,7 +181,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       if stop?
         break
       else
-        @logger.debug("S3 input: processing", :bucket => @bucket, :key => key)
         process_log(queue, key)
       end
     end
@@ -294,7 +292,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   rescue => e
     # skip any broken file
-    @logger.error("Failed to read the file. Skip processing.", :exception => e.class, :message => e.message, :filename => filename)
+    @logger.error("Failed to read file, processing skipped", :exception => e.class, :message => e.message, :filename => filename)
   end
 
   def read_plain_file(filename, block)
@@ -392,6 +390,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   private
   def process_log(queue, key)
+    @logger.debug("Processing", :bucket => @bucket, :key => key)
     object = @s3bucket.object(key)
 
     filename = File.join(temporary_directory, File.basename(key))
@@ -417,14 +416,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # @return [Boolean] True if the file was completely downloaded
   def download_remote_file(remote_object, local_filename)
     completed = false
-    @logger.debug("S3 input: Download remote file", :remote_key => remote_object.key, :local_filename => local_filename)
+    @logger.debug("Downloading remote file", :remote_key => remote_object.key, :local_filename => local_filename)
     File.open(local_filename, 'wb') do |s3file|
       return completed if stop?
       begin
         remote_object.get(:response_target => s3file)
         completed = true
       rescue Aws::Errors::ServiceError => e
-        @logger.warn("S3 input: Unable to download remote file", :exception => e.class, :message => e.message, :remote_key => remote_object.key)
+        @logger.warn("Unable to download remote file", :exception => e.class, :message => e.message, :remote_key => remote_object.key)
       end
     end
     completed
@@ -456,7 +455,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         end
       end
     rescue => e
-      @logger.debug("Could not determine Glacier restore status.", :exception => e.class, :message => e.message)
+      @logger.debug("Could not determine Glacier restore status", :exception => e.class, :message => e.message)
     end
     return false
   end
