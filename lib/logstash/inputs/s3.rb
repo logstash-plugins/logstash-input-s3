@@ -425,6 +425,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           expiry_date = DateTime.parse(restore[1])
           return true if DateTime.now < expiry_date # restored
         else
+          @logger.debug("No expiry-date header for restore request: #{object.data.restore}")
           return nil # no expiry-date found for ongoing request
         end
       end
