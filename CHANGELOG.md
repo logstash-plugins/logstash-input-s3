@@ -1,6 +1,7 @@
 ## 3.5.0
  - Added support for including objects restored from Glacier or Glacier Deep [#199](https://github.com/logstash-plugins/logstash-input-s3/issues/199)
  - Added `gzip_pattern` option, enabling more flexible determination of whether a file is gzipped [#165](https://github.com/logstash-plugins/logstash-input-s3/issues/165)
+ - Refactor: log exception: class + unify logging messages a bit [#201](https://github.com/logstash-plugins/logstash-input-s3/pull/201)
 
 ## 3.4.1
  - Fixed link formatting for input type (documentation)
