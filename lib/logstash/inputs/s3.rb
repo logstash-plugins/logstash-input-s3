@@ -3,6 +3,7 @@ require "logstash/inputs/base"
 require "logstash/namespace"
 require "logstash/plugin_mixins/aws_config"
 require "time"
+require "date"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
@@ -10,12 +11,6 @@ require "aws-sdk"
 require "logstash/inputs/s3/patch"
 
 require 'java'
-java_import java.io.InputStream
-java_import java.io.InputStreamReader
-java_import java.io.FileInputStream
-java_import java.io.BufferedReader
-java_import java.util.zip.GZIPInputStream
-java_import java.util.zip.ZipException
 
 Aws.eager_autoload!
 # Stream events from files from a S3 bucket.
@@ -23,6 +18,14 @@ Aws.eager_autoload!
 # Each line from each file generates an event.
 # Files ending in `.gz` are handled as gzip'ed files.
 class LogStash::Inputs::S3 < LogStash::Inputs::Base
+
+  java_import java.io.InputStream
+  java_import java.io.InputStreamReader
+  java_import java.io.FileInputStream
+  java_import java.io.BufferedReader
+  java_import java.util.zip.GZIPInputStream
+  java_import java.util.zip.ZipException
+
   include LogStash::PluginMixins::AwsConfig::V2
 
   config_name "s3"
@@ -100,13 +103,16 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # be present.
   config :include_object_properties, :validate => :boolean, :default => false
 
-  public
+  # Regular expression used to determine whether an input file is in gzip format.
+  # default to an expression that matches *.gz and *.gzip file extensions
+  config :gzip_pattern, :validate => :string, :default => "\.gz(ip)?$"
+
   def register
     require "fileutils"
     require "digest/md5"
     require "aws-sdk-resources"
 
-    @logger.info("Registering s3 input", :bucket => @bucket, :region => @region)
+    @logger.info("Registering", :bucket => @bucket, :region => @region)
 
     s3 = get_s3object
 
@@ -132,7 +138,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  public
   def run(queue)
     @current_thread = Thread.current
     Stud.interval(@interval) do
@@ -141,36 +146,33 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end # def run
 
-  public
   def list_new_files
     objects = {}
     found = false
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
-        @logger.debug("S3 input: Found key", :key => log.key)
+        @logger.debug('Found key', :key => log.key)
         if ignore_filename?(log.key)
-          @logger.debug('S3 input: Ignoring', :key => log.key)
+          @logger.debug('Ignoring', :key => log.key)
         elsif log.content_length <= 0
-          @logger.debug('S3 Input: Object Zero Length', :key => log.key)
+          @logger.debug('Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
-          @logger.debug('S3 Input: Object Not Modified', :key => log.key)
-        elsif log.storage_class.start_with?('GLACIER')
-          @logger.debug('S3 Input: Object Archived to Glacier', :key => log.key)
+          @logger.debug('Object Not Modified', :key => log.key)
+        elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
+          @logger.debug('Object Archived to Glacier', :key => log.key)
         else
           objects[log.key] = log.last_modified
-          @logger.debug("S3 input: Adding to objects[]", :key => log.key)
-          @logger.debug("objects[] length is: ", :length => objects.length)
+          @logger.debug("Added to objects[]", :key => log.key, :length => objects.length)
         end
       end
-      @logger.info('S3 input: No files found in bucket', :prefix => prefix) unless found
+      @logger.info('No files found in bucket', :prefix => prefix) unless found
     rescue Aws::Errors::ServiceError => e
-      @logger.error("S3 input: Unable to list objects in bucket", :prefix => prefix, :message => e.message)
+      @logger.error("Unable to list objects in bucket", :exception => e.class, :message => e.message, :backtrace => e.backtrace, :prefix => prefix)
     end
     objects.keys.sort {|a,b| objects[a] <=> objects[b]}
   end # def fetch_new_files
 
-  public
   def backup_to_bucket(object)
     unless @backup_to_bucket.nil?
       backup_key = "#{@backup_add_prefix}#{object.key}"
@@ -183,14 +185,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  public
   def backup_to_dir(filename)
     unless @backup_to_dir.nil?
       FileUtils.cp(filename, @backup_to_dir)
     end
   end
 
-  public
   def process_files(queue)
     objects = list_new_files
 
@@ -198,13 +198,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       if stop?
         break
       else
-        @logger.debug("S3 input processing", :bucket => @bucket, :key => key)
         process_log(queue, key)
       end
     end
   end # def process_files
 
-  public
   def stop
     # @current_thread is initialized in the `#run` method,
     # this variable is needed because the `#stop` is a called in another thread
@@ -271,24 +269,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     return true
   end # def process_local_log
 
-  private
   def event_is_metadata?(event)
     return false unless event.get("message").class == String
     line = event.get("message")
     version_metadata?(line) || fields_metadata?(line)
   end
 
-  private
   def version_metadata?(line)
     line.start_with?('#Version: ')
   end
 
-  private
   def fields_metadata?(line)
     line.start_with?('#Fields: ')
   end
 
-  private
   def update_metadata(metadata, event)
     line = event.get('message').strip
 
@@ -301,7 +295,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   def read_file(filename, &block)
     if gzip?(filename)
       read_gzip_file(filename, block)
@@ -310,7 +303,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   rescue => e
     # skip any broken file
-    @logger.error("Failed to read the file. Skip processing.", :filename => filename, :exception => e.message)
+    @logger.error("Failed to read file, processing skipped", :exception => e.class, :message => e.message, :filename => filename)
   end
 
   def read_plain_file(filename, block)
@@ -319,7 +312,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   def read_gzip_file(filename, block)
     file_stream = FileInputStream.new(filename)
     gzip_stream = GZIPInputStream.new(file_stream)
@@ -336,24 +328,20 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     file_stream.close unless file_stream.nil?
   end
 
-  private
   def gzip?(filename)
-    filename.end_with?('.gz','.gzip')
+    Regexp.new(@gzip_pattern).match(filename)
   end
 
-  private
   def sincedb
     @sincedb ||= if @sincedb_path.nil?
                     @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
                     SinceDB::File.new(sincedb_file)
                   else
-                    @logger.info("Using the provided sincedb_path",
-                                 :sincedb_path => @sincedb_path)
+                    @logger.info("Using the provided sincedb_path", :sincedb_path => @sincedb_path)
                     SinceDB::File.new(@sincedb_path)
                   end
   end
 
-  private
   def sincedb_file
     digest = Digest::MD5.hexdigest("#{@bucket}+#{@prefix}")
     dir = File.join(LogStash::SETTINGS.get_value("path.data"), "plugins", "inputs", "s3")
@@ -386,11 +374,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     symbolized
   end
 
-  private
-  def old_sincedb_file
-  end
-
-  private
   def ignore_filename?(filename)
     if @prefix == filename
       return true
@@ -407,8 +390,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   def process_log(queue, key)
+    @logger.debug("Processing", :bucket => @bucket, :key => key)
     object = @s3bucket.object(key)
 
     filename = File.join(temporary_directory, File.basename(key))
@@ -426,7 +409,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  private
   # Stream the remove file to the local disk
   #
   # @param [S3Object] Reference to the remove S3 objec to download
@@ -434,33 +416,30 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # @return [Boolean] True if the file was completely downloaded
   def download_remote_file(remote_object, local_filename)
     completed = false
-    @logger.debug("S3 input: Download remote file", :remote_key => remote_object.key, :local_filename => local_filename)
+    @logger.debug("Downloading remote file", :remote_key => remote_object.key, :local_filename => local_filename)
     File.open(local_filename, 'wb') do |s3file|
       return completed if stop?
       begin
         remote_object.get(:response_target => s3file)
         completed = true
       rescue Aws::Errors::ServiceError => e
-        @logger.warn("S3 input: Unable to download remote file", :remote_key => remote_object.key, :message => e.message)
+        @logger.warn("Unable to download remote file", :exception => e.class, :message => e.message, :remote_key => remote_object.key)
       end
     end
     completed
   end
 
-  private
   def delete_file_from_bucket(object)
     if @delete and @backup_to_bucket.nil?
       object.delete()
     end
   end
 
-  private
   def get_s3object
     options = symbolized_settings.merge(aws_options_hash || {})
     s3 = Aws::S3::Resource.new(options)
   end
 
-  private
   def backup_options
     options = {}
     options[:acl] = @backup_canned_acl if @backup_canned_acl
@@ -476,7 +455,24 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     options
   end
 
-  private
+  def file_restored?(object)
+    begin
+      restore = object.data.restore
+      if restore && restore.match(/ongoing-request\s?=\s?["']false["']/)
+        if restore = restore.match(/expiry-date\s?=\s?["'](.*?)["']/)
+          expiry_date = DateTime.parse(restore[1])
+          return true if DateTime.now < expiry_date # restored
+        else
+          @logger.debug("No expiry-date header for restore request: #{object.data.restore}")
+          return nil # no expiry-date found for ongoing request
+        end
+      end
+    rescue => e
+      @logger.debug("Could not determine Glacier restore status", :exception => e.class, :message => e.message)
+    end
+    return false
+  end
+  
   module SinceDB
     class File
       def initialize(file)
