@@ -1,3 +1,6 @@
+## 3.5.1
+ - [DOC]Added example for `exclude_pattern` and reordered option descriptions [#204](https://github.com/logstash-plugins/logstash-input-s3/issues/204)
+ 
 ## 3.5.0
  - Added support for including objects restored from Glacier or Glacier Deep [#199](https://github.com/logstash-plugins/logstash-input-s3/issues/199)
  - Added `gzip_pattern` option, enabling more flexible determination of whether a file is gzipped [#165](https://github.com/logstash-plugins/logstash-input-s3/issues/165)
