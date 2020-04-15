@@ -80,6 +80,29 @@ This plugin uses the AWS SDK and supports several ways to get credentials, which
 4. Environment variables `AMAZON_ACCESS_KEY_ID` and `AMAZON_SECRET_ACCESS_KEY`
 5. IAM Instance Profile (available when running inside EC2)
 
+
+[id="plugins-{type}s-{plugin}-additional_settings"]
+===== `additional_settings`
+
+  * Value type is <<hash,hash>>
+  * Default value is `{}`
+
+Key-value pairs of settings and corresponding values used to parametrize
+the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/api/Aws/S3/Client.html[the AWS SDK documentation]. Example:
+
+[source,ruby]
+    input {
+      s3 {
+        "access_key_id" => "1234"
+        "secret_access_key" => "secret"
+        "bucket" => "logstash-test"
+        "additional_settings" => {
+          "force_path_style" => true
+          "follow_redirects" => false
+        }
+      }
+    }
+
 [id="plugins-{type}s-{plugin}-aws_credentials_file"]
 ===== `aws_credentials_file` 
 
@@ -157,7 +180,17 @@ guaranteed to work correctly with the AWS SDK.
   * Value type is <<string,string>>
   * Default value is `nil`
 
-Ruby style regexp of keys to exclude from the bucket
+Ruby style regexp of keys to exclude from the bucket.
+
+Example:
+
+[source,ruby]
+-----
+"exclude_pattern" => "\/2020\/04\/"
+-----
+
+This pattern excludes all logs containing "/2020/04/" in the path.
+
 
 [id="plugins-{type}s-{plugin}-gzip_pattern"]
 ===== `gzip_pattern`
@@ -166,28 +199,6 @@ Ruby style regexp of keys to exclude from the bucket
   * Default value is `"\.gz(ip)?$"`
 
 Regular expression used to determine whether an input file is in gzip format.
-
-[id="plugins-{type}s-{plugin}-additional_settings"]
-===== `additional_settings`
-
-  * Value type is <<hash,hash>>
-  * Default value is `{}`
-
-Key-value pairs of settings and corresponding values used to parametrize
-the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/api/Aws/S3/Client.html[the AWS SDK documentation]. Example:
-
-[source,ruby]
-    input {
-      s3 {
-        "access_key_id" => "1234"
-        "secret_access_key" => "secret"
-        "bucket" => "logstash-test"
-        "additional_settings" => {
-          "force_path_style" => true
-          "follow_redirects" => false
-        }
-      }
-    }
 
 [id="plugins-{type}s-{plugin}-include_object_properties"]
 ===== `include_object_properties`
