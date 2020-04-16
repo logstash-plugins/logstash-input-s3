@@ -181,6 +181,7 @@ guaranteed to work correctly with the AWS SDK.
   * Default value is `nil`
 
 Ruby style regexp of keys to exclude from the bucket.
+Files matching the pattern are skipped _after_ they have been listed, so it is recommended to use <<plugins-{type}s-{plugin}-prefix>> instead where possible.
 
 Example:
 
