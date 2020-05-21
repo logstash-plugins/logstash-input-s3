@@ -23,6 +23,8 @@ include::{include_path}/plugin_header.asciidoc[]
 
 Stream events from files from a S3 bucket.
 
+IMPORTANT: The S3 input plugin only supports AWS S3. Other S3 compatible storage solutions are not supported.
+
 Each line from each file generates an event.
 Files ending in `.gz` are handled as gzip'ed files.
 
