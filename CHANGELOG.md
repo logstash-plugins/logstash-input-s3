@@ -1,3 +1,6 @@
+## 3.5.2
+ - [DOC]Added note that only AWS S3 is supported. No other S3 compatible storage solutions are supported. [#208](https://github.com/logstash-plugins/logstash-input-s3/issues/208)
+
 ## 3.5.1
  - [DOC]Added example for `exclude_pattern` and reordered option descriptions [#204](https://github.com/logstash-plugins/logstash-input-s3/issues/204)
  
