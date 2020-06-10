@@ -1,7 +1,6 @@
 # encoding: utf-8
 require "logstash/inputs/base"
 require "logstash/namespace"
-require "logstash/plugin_mixins/aws_config"
 require "time"
 require "date"
 require "tmpdir"
