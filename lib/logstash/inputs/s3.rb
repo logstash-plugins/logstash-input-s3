@@ -25,6 +25,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   java_import java.util.zip.GZIPInputStream
   java_import java.util.zip.ZipException
 
+  CredentialConfig = Struct.new(
+    :access_key_id,
+    :secret_access_key,
+    :session_token,
+    :profile,
+    :instance_profile_credentials_retries,
+    :instance_profile_credentials_timeout,
+    :region)
+
   config_name "s3"
 
   default :codec, "plain"
