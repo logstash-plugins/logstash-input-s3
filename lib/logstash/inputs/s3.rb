@@ -6,7 +6,7 @@ require "date"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
-require "aws-sdk"
+require "aws-sdk-s3"
 require "logstash/inputs/s3/patch"
 
 require 'java'
@@ -104,7 +104,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config :access_key_id, :validate => :string
 
   # The AWS Secret Access Key
-  config :secret_access_key, :validate => :password
+  config :secret_access_key, :validate => :string
 
   # Profile
   config :profile, :validate => :string, :default => "default"
@@ -142,7 +142,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def register
     require "fileutils"
     require "digest/md5"
-    require "aws-sdk-resources"
 
     @logger.info("Registering", :bucket => @bucket, :region => @region)
 
