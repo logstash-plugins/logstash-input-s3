@@ -317,6 +317,7 @@ describe LogStash::Inputs::S3 do
       events = fetch_events(config)
       expect(events.size).to eq(events_to_process)
       expect(events[0].get("[@metadata][s3][key]")).to eql log.key
+      expect(events[1].get("[@metadata][s3][key]")).to eql log.key
     end
 
     it "deletes the temporary file" do
