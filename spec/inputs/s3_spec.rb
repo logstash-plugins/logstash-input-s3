@@ -33,7 +33,7 @@ describe LogStash::Inputs::S3 do
   end
 
   context "when interrupting the plugin" do
-    let(:config) { super.merge({ "interval" => 5 }) }
+    let(:config) { super().merge({ "interval" => 5 }) }
 
     before do
       expect_any_instance_of(LogStash::Inputs::S3).to receive(:list_new_files).and_return(TestInfiniteS3Object.new)
@@ -451,7 +451,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'compressed with gzip extension and using custom gzip_pattern option' do
-      let(:config) { super.merge({ "gzip_pattern" => "gee.zip$" }) }
+      let(:config) { super().merge({ "gzip_pattern" => "gee.zip$" }) }
       let(:log) { double(:key => 'log.gee.zip', :last_modified => Time.now - 2 * day, :content_length => 5, :storage_class => 'STANDARD') }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'compressed.log.gee.zip') }
        include_examples "generated events"
@@ -499,7 +499,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'when include_object_properties is set to true' do
-      let(:config) { super.merge({ "include_object_properties" => true }) }
+      let(:config) { super().merge({ "include_object_properties" => true }) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
 
       it 'should extract object properties onto [@metadata][s3]' do
@@ -513,7 +513,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 'when include_object_properties is set to false' do
-      let(:config) { super.merge({ "include_object_properties" => false }) }
+      let(:config) { super().merge({ "include_object_properties" => false }) }
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'uncompressed.log') }
 
       it 'should NOT extract object properties onto [@metadata][s3]' do
