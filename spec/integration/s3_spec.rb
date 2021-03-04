@@ -10,6 +10,7 @@ describe LogStash::Inputs::S3, :integration => true, :s3 => true do
 
     upload_file('../fixtures/uncompressed.log' , "#{prefix}uncompressed_1.log")
     upload_file('../fixtures/compressed.log.gz', "#{prefix}compressed_1.log.gz")
+    sleep(LogStash::Inputs::S3::CUTOFF_SECOND + 1)
   end
 
   after do
@@ -28,6 +29,7 @@ describe LogStash::Inputs::S3, :integration => true, :s3 => true do
                                "prefix" => prefix,
                                "temporary_directory" => temporary_directory } }
   let(:backup_prefix) { "backup/" }
+  let(:backup_bucket) { "logstash-s3-input-backup" }
 
   it "support prefix to scope the remote files" do
     events = fetch_events(minimal_settings)
@@ -49,13 +51,17 @@ describe LogStash::Inputs::S3, :integration => true, :s3 => true do
   end
 
   context "remote backup" do
+    before do
+      create_bucket(backup_bucket)
+    end
+
     it "another bucket" do
-      fetch_events(minimal_settings.merge({ "backup_to_bucket" => "logstash-s3-input-backup"}))
-      expect(list_remote_files("", "logstash-s3-input-backup").size).to eq(2)
+      fetch_events(minimal_settings.merge({ "backup_to_bucket" => backup_bucket}))
+      expect(list_remote_files("", backup_bucket).size).to eq(2)
     end
 
     after do
-      delete_bucket("logstash-s3-input-backup")
+      delete_bucket(backup_bucket)
     end
   end
 end
