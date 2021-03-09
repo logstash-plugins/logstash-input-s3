@@ -140,7 +140,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
           @logger.debug('Object Not Modified', :key => log.key)
-        elsif log.last_modified > (Time.now - CUTOFF_SECOND).utc # modify time within last two seconds will be processed in next cycle
+        elsif log.last_modified > (Time.now - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
           @logger.debug('Object Modified After Cutoff Time', :key => log.key)
         elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
           @logger.debug('Object Archived to Glacier', :key => log.key)
