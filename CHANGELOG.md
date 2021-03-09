@@ -1,3 +1,6 @@
+## 3.5.3
+ - Fixed unprocessed file with the same `last_modified` in ingestion. [#220](https://github.com/logstash-plugins/logstash-input-s3/pull/220)
+
 ## 3.5.2
  - [DOC]Added note that only AWS S3 is supported. No other S3 compatible storage solutions are supported. [#208](https://github.com/logstash-plugins/logstash-input-s3/issues/208)
 
