@@ -378,11 +378,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     filename = File.join(temporary_directory, File.basename(log.key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        backup_to_bucket(object)
-        backup_to_dir(filename)
-        delete_file_from_bucket(object)
-        FileUtils.remove_entry_secure(filename, true)
-        sincedb.write(log.last_modified)
+        if object.last_modified == log.last_modified
+          backup_to_bucket(object)
+          backup_to_dir(filename)
+          delete_file_from_bucket(object)
+          FileUtils.remove_entry_secure(filename, true)
+          sincedb.write(log.last_modified)
+        else
+          @logger.info("#{log.key} is updated at #{object.last_modified} and will process in the next cycle")
+        end
       end
     else
       FileUtils.remove_entry_secure(filename, true)

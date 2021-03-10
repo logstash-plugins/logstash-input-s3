@@ -571,7 +571,7 @@ describe LogStash::Inputs::S3 do
     end
 
     context 's3 object updated after getting summary' do
-      it 'should use summary timestamp as sincedb' do
+      it 'should not update sincedb' do
         s3_summary = [
           double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
           double(:key => 'TODAY', :last_modified => Time.now.round - (cutoff * 10), :content_length => 5, :storage_class => 'STANDARD')
@@ -592,7 +592,7 @@ describe LogStash::Inputs::S3 do
         expect(s3_plugin).to receive(:process_local_log).and_return(true).at_least(size)
 
         s3_plugin.process_files(queue)
-        expect(s3_plugin.send(:sincedb).read).to eq(s3_summary[1].last_modified)
+        expect(s3_plugin.send(:sincedb).read).to eq(s3_summary[0].last_modified)
       end
     end
   end
