@@ -1,4 +1,4 @@
-## 3.5.3
+## 3.6.0
  - Fixed unprocessed file with the same `last_modified` in ingestion. [#220](https://github.com/logstash-plugins/logstash-input-s3/pull/220)
 
 ## 3.5.2
