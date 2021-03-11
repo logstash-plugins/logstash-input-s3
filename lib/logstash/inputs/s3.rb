@@ -86,6 +86,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to an expression that matches *.gz and *.gzip file extensions
   config :gzip_pattern, :validate => :string, :default => "\.gz(ip)?$"
 
+  CUTOFF_SECOND = 3
+
   def register
     require "fileutils"
     require "digest/md5"
@@ -126,7 +128,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end # def run
 
   def list_new_files
-    objects = {}
+    objects = []
     found = false
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
@@ -138,10 +140,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('Object Zero Length', :key => log.key)
         elsif !sincedb.newer?(log.last_modified)
           @logger.debug('Object Not Modified', :key => log.key)
+        elsif log.last_modified > (Time.now - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
+          @logger.debug('Object Modified After Cutoff Time', :key => log.key)
         elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
           @logger.debug('Object Archived to Glacier', :key => log.key)
         else
-          objects[log.key] = log.last_modified
+          objects << log
           @logger.debug("Added to objects[]", :key => log.key, :length => objects.length)
         end
       end
@@ -149,7 +153,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     rescue Aws::Errors::ServiceError => e
       @logger.error("Unable to list objects in bucket", :exception => e.class, :message => e.message, :backtrace => e.backtrace, :prefix => prefix)
     end
-    objects.keys.sort {|a,b| objects[a] <=> objects[b]}
+    objects.sort_by { |log| log.last_modified }
   end # def fetch_new_files
 
   def backup_to_bucket(object)
@@ -171,11 +175,11 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def process_files(queue)
     objects = list_new_files
 
-    objects.each do |key|
+    objects.each do |log|
       if stop?
         break
       else
-        process_log(queue, key)
+        process_log(queue, log)
       end
     end
   end # def process_files
@@ -367,19 +371,22 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
   end
 
-  def process_log(queue, key)
-    @logger.debug("Processing", :bucket => @bucket, :key => key)
-    object = @s3bucket.object(key)
+  def process_log(queue, log)
+    @logger.debug("Processing", :bucket => @bucket, :key => log.key)
+    object = @s3bucket.object(log.key)
 
-    filename = File.join(temporary_directory, File.basename(key))
+    filename = File.join(temporary_directory, File.basename(log.key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        lastmod = object.last_modified
-        backup_to_bucket(object)
-        backup_to_dir(filename)
-        delete_file_from_bucket(object)
-        FileUtils.remove_entry_secure(filename, true)
-        sincedb.write(lastmod)
+        if object.last_modified == log.last_modified
+          backup_to_bucket(object)
+          backup_to_dir(filename)
+          delete_file_from_bucket(object)
+          FileUtils.remove_entry_secure(filename, true)
+          sincedb.write(log.last_modified)
+        else
+          @logger.info("#{log.key} is updated at #{object.last_modified} and will process in the next cycle")
+        end
       end
     else
       FileUtils.remove_entry_secure(filename, true)

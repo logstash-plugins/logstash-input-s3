@@ -24,6 +24,7 @@ describe LogStash::Inputs::S3 do
       "sincedb_path" => File.join(sincedb_path, ".sincedb")
     }
   }
+  let(:cutoff) { LogStash::Inputs::S3::CUTOFF_SECOND }
 
 
   before do
@@ -34,9 +35,10 @@ describe LogStash::Inputs::S3 do
 
   context "when interrupting the plugin" do
     let(:config) { super().merge({ "interval" => 5 }) }
+    let(:s3_obj) { double(:key => "awesome-key", :last_modified => Time.now.round, :content_length => 10, :storage_class => 'STANDARD', :object => double(:data => double(:restore => nil)) ) }
 
     before do
-      expect_any_instance_of(LogStash::Inputs::S3).to receive(:list_new_files).and_return(TestInfiniteS3Object.new)
+      expect_any_instance_of(LogStash::Inputs::S3).to receive(:list_new_files).and_return(TestInfiniteS3Object.new(s3_obj))
     end
 
     it_behaves_like "an interruptible input plugin"
@@ -115,11 +117,12 @@ describe LogStash::Inputs::S3 do
   describe "#list_new_files" do
     before { allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects_list } }
 
-    let!(:present_object) {double(:key => 'this-should-be-present', :last_modified => Time.now, :content_length => 10, :storage_class => 'STANDARD', :object => double(:data => double(:restore => nil)) ) }
-    let!(:archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => nil)) ) }
-    let!(:deep_archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => nil)) ) }
-    let!(:restored_object) {double(:key => 'this-should-be-restored-from-archive', :last_modified => Time.now, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => 'ongoing-request="false", expiry-date="Thu, 01 Jan 2099 00:00:00 GMT"')) ) }
-    let!(:deep_restored_object) {double(:key => 'this-should-be-restored-from-deep-archive', :last_modified => Time.now, :content_length => 10, :storage_class => 'DEEP_ARCHIVE', :object => double(:data => double(:restore => 'ongoing-request="false", expiry-date="Thu, 01 Jan 2099 00:00:00 GMT"')) ) }
+    let!(:present_object_after_cutoff) {double(:key => 'this-should-not-be-present', :last_modified => Time.now, :content_length => 10, :storage_class => 'STANDARD', :object => double(:data => double(:restore => nil)) ) }
+    let!(:present_object) {double(:key => 'this-should-be-present', :last_modified => Time.now - cutoff, :content_length => 10, :storage_class => 'STANDARD', :object => double(:data => double(:restore => nil)) ) }
+    let!(:archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now  - cutoff, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => nil)) ) }
+    let!(:deep_archived_object) {double(:key => 'this-should-be-archived', :last_modified => Time.now - cutoff, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => nil)) ) }
+    let!(:restored_object) {double(:key => 'this-should-be-restored-from-archive', :last_modified => Time.now  - cutoff, :content_length => 10, :storage_class => 'GLACIER', :object => double(:data => double(:restore => 'ongoing-request="false", expiry-date="Thu, 01 Jan 2099 00:00:00 GMT"')) ) }
+    let!(:deep_restored_object) {double(:key => 'this-should-be-restored-from-deep-archive', :last_modified => Time.now  - cutoff, :content_length => 10, :storage_class => 'DEEP_ARCHIVE', :object => double(:data => double(:restore => 'ongoing-request="false", expiry-date="Thu, 01 Jan 2099 00:00:00 GMT"')) ) }
     let(:objects_list) {
       [
         double(:key => 'exclude-this-file-1', :last_modified => Time.now - 2 * day, :content_length => 100, :storage_class => 'STANDARD'),
@@ -127,7 +130,8 @@ describe LogStash::Inputs::S3 do
         archived_object,
         restored_object,
         deep_restored_object,
-        present_object
+        present_object,
+        present_object_after_cutoff
       ]
     }
 
@@ -135,7 +139,7 @@ describe LogStash::Inputs::S3 do
       plugin = LogStash::Inputs::S3.new(config.merge({ "exclude_pattern" => "^exclude" }))
       plugin.register
 
-      files = plugin.list_new_files
+      files = plugin.list_new_files.map { |item| item.key }
       expect(files).to include(present_object.key)
       expect(files).to include(restored_object.key)
       expect(files).to include(deep_restored_object.key)
@@ -143,6 +147,7 @@ describe LogStash::Inputs::S3 do
       expect(files).to_not include('exclude/logstash')    # matches exclude pattern
       expect(files).to_not include(archived_object.key)   # archived
       expect(files).to_not include(deep_archived_object.key)   # archived
+      expect(files).to_not include(present_object_after_cutoff.key)   # after cutoff
       expect(files.size).to eq(3)
     end
 
@@ -150,7 +155,7 @@ describe LogStash::Inputs::S3 do
       plugin = LogStash::Inputs::S3.new(config)
       plugin.register
 
-      files = plugin.list_new_files
+      files = plugin.list_new_files.map { |item| item.key }
       expect(files).to include(present_object.key)
       expect(files).to include(restored_object.key)
       expect(files).to include(deep_restored_object.key)
@@ -158,6 +163,7 @@ describe LogStash::Inputs::S3 do
       expect(files).to include('exclude/logstash')      # no exclude pattern given
       expect(files).to_not include(archived_object.key) # archived
       expect(files).to_not include(deep_archived_object.key)   # archived
+      expect(files).to_not include(present_object_after_cutoff.key)   # after cutoff
       expect(files.size).to eq(5)
     end
 
@@ -204,7 +210,7 @@ describe LogStash::Inputs::S3 do
                                                          'backup_to_bucket' => config['bucket']}))
         plugin.register
 
-        files = plugin.list_new_files
+        files = plugin.list_new_files.map { |item| item.key }
         expect(files).to include(present_object.key)
         expect(files).to_not include('mybackup-log-1') # matches backup prefix
         expect(files.size).to eq(1)
@@ -218,7 +224,7 @@ describe LogStash::Inputs::S3 do
       allow_any_instance_of(LogStash::Inputs::S3::SinceDB::File).to receive(:read).and_return(Time.now - day)
       plugin.register
 
-      files = plugin.list_new_files
+      files = plugin.list_new_files.map { |item| item.key }
       expect(files).to include(present_object.key)
       expect(files).to include(restored_object.key)
       expect(files).to include(deep_restored_object.key)
@@ -226,6 +232,7 @@ describe LogStash::Inputs::S3 do
       expect(files).to_not include('exclude/logstash')    # too old
       expect(files).to_not include(archived_object.key)   # archived
       expect(files).to_not include(deep_archived_object.key) # archived
+      expect(files).to_not include(present_object_after_cutoff.key)   # after cutoff
       expect(files.size).to eq(3)
     end
 
@@ -241,13 +248,14 @@ describe LogStash::Inputs::S3 do
 
         plugin = LogStash::Inputs::S3.new(config.merge({ 'prefix' => prefix }))
         plugin.register
-        expect(plugin.list_new_files).to eq([present_object.key])
+        expect(plugin.list_new_files.map { |item| item.key }).to eq([present_object.key])
     end
 
     it 'should sort return object sorted by last_modification date with older first' do
       objects = [
         double(:key => 'YESTERDAY', :last_modified => Time.now - day, :content_length => 5, :storage_class => 'STANDARD'),
         double(:key => 'TODAY', :last_modified => Time.now, :content_length => 5, :storage_class => 'STANDARD'),
+        double(:key => 'TODAY_BEFORE_CUTOFF', :last_modified => Time.now - cutoff, :content_length => 5, :storage_class => 'STANDARD'),
         double(:key => 'TWO_DAYS_AGO', :last_modified => Time.now - 2 * day, :content_length => 5, :storage_class => 'STANDARD')
       ]
 
@@ -256,7 +264,7 @@ describe LogStash::Inputs::S3 do
 
       plugin = LogStash::Inputs::S3.new(config)
       plugin.register
-      expect(plugin.list_new_files).to eq(['TWO_DAYS_AGO', 'YESTERDAY', 'TODAY'])
+      expect(plugin.list_new_files.map { |item| item.key }).to eq(['TWO_DAYS_AGO', 'YESTERDAY', 'TODAY_BEFORE_CUTOFF'])
     end
 
     describe "when doing backup on the s3" do
@@ -525,6 +533,67 @@ describe LogStash::Inputs::S3 do
 
       include_examples "generated events"
     end
+  end
 
+  describe "data loss" do
+    let(:s3_plugin) { LogStash::Inputs::S3.new(config) }
+    let(:queue) { [] }
+
+    before do
+      s3_plugin.register
+    end
+
+    context 'events come after cutoff time' do
+      it 'should be processed in next cycle' do
+        s3_objects = [
+          double(:key => 'TWO_DAYS_AGO', :last_modified => Time.now.round - 2 * day, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'TODAY_BEFORE_CUTOFF', :last_modified => Time.now.round - cutoff, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'TODAY', :last_modified => Time.now.round, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'TODAY', :last_modified => Time.now.round, :content_length => 5, :storage_class => 'STANDARD')
+        ]
+        size = s3_objects.length
+
+        allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { s3_objects }
+        allow_any_instance_of(Aws::S3::Bucket).to receive(:object).and_return(*s3_objects)
+        expect(s3_plugin).to receive(:process_log).at_least(size).and_call_original
+        expect(s3_plugin).to receive(:stop?).and_return(false).at_least(size)
+        expect(s3_plugin).to receive(:download_remote_file).and_return(true).at_least(size)
+        expect(s3_plugin).to receive(:process_local_log).and_return(true).at_least(size)
+
+        # first iteration
+        s3_plugin.process_files(queue)
+
+        # second iteration
+        sleep(cutoff + 1)
+        s3_plugin.process_files(queue)
+      end
+    end
+
+    context 's3 object updated after getting summary' do
+      it 'should not update sincedb' do
+        s3_summary = [
+          double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'TODAY', :last_modified => Time.now.round - (cutoff * 10), :content_length => 5, :storage_class => 'STANDARD')
+        ]
+
+        s3_objects = [
+          double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'TODAY_UPDATED', :last_modified => Time.now.round, :content_length => 5, :storage_class => 'STANDARD')
+        ]
+
+        size = s3_objects.length
+
+        allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { s3_summary }
+        allow_any_instance_of(Aws::S3::Bucket).to receive(:object).and_return(*s3_objects)
+        expect(s3_plugin).to receive(:process_log).at_least(size).and_call_original
+        expect(s3_plugin).to receive(:stop?).and_return(false).at_least(size)
+        expect(s3_plugin).to receive(:download_remote_file).and_return(true).at_least(size)
+        expect(s3_plugin).to receive(:process_local_log).and_return(true).at_least(size)
+
+        s3_plugin.process_files(queue)
+        expect(s3_plugin.send(:sincedb).read).to eq(s3_summary[0].last_modified)
+      end
+    end
   end
 end
