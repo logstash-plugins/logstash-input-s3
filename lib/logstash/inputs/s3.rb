@@ -9,6 +9,7 @@ require "stud/interval"
 require "stud/temporary"
 require "aws-sdk"
 require "logstash/inputs/s3/patch"
+require "logstash/plugin_mixins/ecs_compatibility_support"
 
 require 'java'
 
@@ -27,6 +28,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   java_import java.util.zip.ZipException
 
   include LogStash::PluginMixins::AwsConfig::V2
+  include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1)
 
   config_name "s3"
 
@@ -87,6 +89,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config :gzip_pattern, :validate => :string, :default => "\.gz(ip)?$"
 
   CUTOFF_SECOND = 3
+
+  def initialize(*params)
+    super
+    @cloudfront_fields_key = ecs_select[disabled: 'cloudfront_fields', v1: '[@metadata][s3][cloudfront][fields]']
+    @cloudfront_version_key = ecs_select[disabled: 'cloudfront_version', v1: '[@metadata][s3][cloudfront][version]']
+  end
 
   def register
     require "fileutils"
@@ -227,9 +235,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         else
           decorate(event)
 
-          event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
-          event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
-
           if @include_object_properties
             event.set("[@metadata][s3]", object.data.to_h)
           else
@@ -237,6 +242,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           end
 
           event.set("[@metadata][s3][key]", object.key)
+          event.set(@cloudfront_version_key, metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
+          event.set(@cloudfront_fields_key, metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
           queue << event
         end

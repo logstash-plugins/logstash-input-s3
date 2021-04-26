@@ -9,6 +9,7 @@ require_relative "../support/helpers"
 require "stud/temporary"
 require "aws-sdk"
 require "fileutils"
+require 'logstash/plugin_mixins/ecs_compatibility_support/spec_helper'
 
 describe LogStash::Inputs::S3 do
   let(:temporary_directory) { Stud::Temporary.pathname }
@@ -494,12 +495,21 @@ describe LogStash::Inputs::S3 do
     context 'cloudfront' do
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'cloudfront.log') }
 
-      it 'should extract metadata from cloudfront log' do
-        events = fetch_events(config)
+      describe "metadata", :ecs_compatibility_support, :aggregate_failures do
+        ecs_compatibility_matrix(:disabled, :v1) do |ecs_select|
+          before(:each) do
+            allow_any_instance_of(described_class).to receive(:ecs_compatibility).and_return(ecs_compatibility)
+            # subject.register
+          end
 
-        events.each do |event|
-          expect(event.get('cloudfront_fields')).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
-          expect(event.get('cloudfront_version')).to eq('1.0')
+          it 'should extract metadata from cloudfront log' do
+            events = fetch_events(config)
+
+            events.each do |event|
+              expect(event.get ecs_select[disabled: "cloudfront_fields", v1: "[@metadata][s3][cloudfront][fields]"] ).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
+              expect(event.get ecs_select[disabled: "cloudfront_version", v1: "[@metadata][s3][cloudfront][version]"] ).to eq('1.0')
+            end
+          end
         end
       end
 

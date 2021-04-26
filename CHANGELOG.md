@@ -1,3 +1,6 @@
+## 3.7.0
+ - Add ECS support. [#221](https://github.com/logstash-plugins/logstash-input-s3/pull/221)
+
 ## 3.6.0
  - Fixed unprocessed file with the same `last_modified` in ingestion. [#220](https://github.com/logstash-plugins/logstash-input-s3/pull/220)
 
