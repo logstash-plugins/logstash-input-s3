@@ -499,7 +499,6 @@ describe LogStash::Inputs::S3 do
         ecs_compatibility_matrix(:disabled, :v1) do |ecs_select|
           before(:each) do
             allow_any_instance_of(described_class).to receive(:ecs_compatibility).and_return(ecs_compatibility)
-            # subject.register
           end
 
           it 'should extract metadata from cloudfront log' do

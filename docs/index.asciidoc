@@ -31,18 +31,19 @@ Files ending in `.gz` are handled as gzip'ed files.
 
 Files that are archived to AWS Glacier will be skipped.
 
+[id="plugins-{type}s-{plugin}-ecs_compatibility"]
 ==== Event Metadata and the Elastic Common Schema (ECS)
 This plugin adds cloudfront metadata to event.
-By default, the value is stored in the root level.
-When ECS is enabled, it is stored in the `@metadata`.
+When ECS compatibility is disabled, the value is stored in the root level.
+When ECS is enabled, the value is stored in the `@metadata` where it can be used by other plugins in your pipeline.
 
 Here’s how ECS compatibility mode affects output.
 [cols="<l,<l,e,<e"]
 |=======================================================================
-| disabled | v1 | Availability | Description
+| ECS disabled | ECS v1 | Availability | Description
 
-| cloudfront_fields | [@metadata][s3][cloudfront][fields] | available when the file is a cloudfront metadata | columns name of metadata
-| cloudfront_version | [@metadata][s3][cloudfront][version] | available when the file is a cloudfront metadata | version of metadata
+| cloudfront_fields | [@metadata][s3][cloudfront][fields] | available when the file is a CloudFront log | column names of log
+| cloudfront_version | [@metadata][s3][cloudfront][version] | available when the file is a CloudFront log | version of log
 |=======================================================================
 
 [id="plugins-{type}s-{plugin}-options"]
@@ -185,13 +186,14 @@ Whether to delete processed files from the original bucket.
 [id="plugins-{type}s-{plugin}-ecs_compatibility"]
 ===== `ecs_compatibility`
 
-* Value type is <<string,string>>
-* Supported values are:
-** `disabled`: does not use ECS-compatible field names
-** `v1`: uses fields that are compatible with Elastic Common Schema
-* Default value depends on which version of Logstash is running:
-** When Logstash provides a `pipeline.ecs_compatibility` setting, its value is used as the default
-** Otherwise, the default value is `disabled`.
+  * Value type is <<string,string>>
+  * Supported values are:
+  ** `disabled`: does not use ECS-compatible field names
+  ** `v1`: uses metadata fields that are compatible with Elastic Common Schema
+
+Controls this plugin's compatibility with the
+{ecs-ref}[Elastic Common Schema (ECS)].
+See <<plugins-{type}s-{plugin}-ecs_metadata,ECS mapping>> for detailed information.
 
 [id="plugins-{type}s-{plugin}-endpoint"]
 ===== `endpoint`

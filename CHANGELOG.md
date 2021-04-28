@@ -1,5 +1,6 @@
 ## 3.7.0
  - Add ECS support. [#228](https://github.com/logstash-plugins/logstash-input-s3/pull/228)
+ - Fix missing file in cutoff time change. [#224](https://github.com/logstash-plugins/logstash-input-s3/pull/224)
 
 ## 3.6.0
  - Fixed unprocessed file with the same `last_modified` in ingestion. [#220](https://github.com/logstash-plugins/logstash-input-s3/pull/220)
