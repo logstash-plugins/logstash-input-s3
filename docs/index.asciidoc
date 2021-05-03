@@ -193,7 +193,7 @@ Whether to delete processed files from the original bucket.
 
 Controls this plugin's compatibility with the
 {ecs-ref}[Elastic Common Schema (ECS)].
-See <<plugins-{type}s-{plugin}-ecs_metadata,ECS mapping>> for detailed information.
+See <<plugins-{type}s-{plugin}-ecs_metadata>> for detailed information.
 
 [id="plugins-{type}s-{plugin}-endpoint"]
 ===== `endpoint`
