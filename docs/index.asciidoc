@@ -31,7 +31,7 @@ Files ending in `.gz` are handled as gzip'ed files.
 
 Files that are archived to AWS Glacier will be skipped.
 
-[id="plugins-{type}s-{plugin}-ecs_compatibility"]
+[id="plugins-{type}s-{plugin}-ecs_metadata"]
 ==== Event Metadata and the Elastic Common Schema (ECS)
 This plugin adds cloudfront metadata to event.
 When ECS compatibility is disabled, the value is stored in the root level.
