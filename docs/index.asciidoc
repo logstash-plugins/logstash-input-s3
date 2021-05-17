@@ -112,12 +112,12 @@ the connection to s3. See full list in https://docs.aws.amazon.com/sdkforruby/ap
 [source,ruby]
     input {
       s3 {
-        "access_key_id" => "1234"
-        "secret_access_key" => "secret"
-        "bucket" => "logstash-test"
-        "additional_settings" => {
-          "force_path_style" => true
-          "follow_redirects" => false
+        access_key_id => "1234"
+        secret_access_key => "secret"
+        bucket => "logstash-test"
+        additional_settings => {
+          force_path_style => true
+          follow_redirects => false
         }
       }
     }
