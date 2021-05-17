@@ -23,6 +23,10 @@ def list_remote_files(prefix, target_bucket = ENV['AWS_LOGSTASH_TEST_BUCKET'])
   bucket.objects(:prefix => prefix).collect(&:key)
 end
 
+def create_bucket(name)
+  s3object.bucket(name).create
+end
+
 def delete_bucket(name)
   s3object.bucket(name).objects.map(&:delete)
   s3object.bucket(name).delete
@@ -33,13 +37,16 @@ def s3object
 end
 
 class TestInfiniteS3Object
+  def initialize(s3_obj)
+    @s3_obj = s3_obj
+  end
+
   def each
     counter = 1
 
     loop do
-      yield "awesome-#{counter}"
+      yield @s3_obj
       counter +=1
     end
   end
 end
-
