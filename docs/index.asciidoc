@@ -189,7 +189,7 @@ Whether to delete processed files from the original bucket.
   * Value type is <<string,string>>
   * Supported values are:
   ** `disabled`: does not use ECS-compatible field names
-  ** `v1`: uses metadata fields that are compatible with Elastic Common Schema
+  ** `v1`,`v8`: uses metadata fields that are compatible with Elastic Common Schema
 
 Controls this plugin's compatibility with the
 {ecs-ref}[Elastic Common Schema (ECS)].

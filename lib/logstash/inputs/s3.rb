@@ -28,7 +28,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   java_import java.util.zip.ZipException
 
   include LogStash::PluginMixins::AwsConfig::V2
-  include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1)
+  include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1, :v8 => :v1)
 
   config_name "s3"
 
