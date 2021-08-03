@@ -43,7 +43,7 @@ describe LogStash::Inputs::S3 do
     end
 
     it_behaves_like "an interruptible input plugin" do
-      let(:allowed_lag) { 8 } if LOGSTASH_VERSION.split('.').first.to_i <= 6
+      let(:allowed_lag) { 16 } if LOGSTASH_VERSION.split('.').first.to_i <= 6
     end
   end
 
