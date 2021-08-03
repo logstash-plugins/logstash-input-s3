@@ -1,3 +1,6 @@
+## 3.8.0
+ - Add ECS v8 support.
+
 ## 3.7.0
  - Add ECS support. [#228](https://github.com/logstash-plugins/logstash-input-s3/pull/228)
  - Fix missing file in cutoff time change. [#224](https://github.com/logstash-plugins/logstash-input-s3/pull/224)

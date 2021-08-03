@@ -42,7 +42,9 @@ describe LogStash::Inputs::S3 do
       expect_any_instance_of(LogStash::Inputs::S3).to receive(:list_new_files).and_return(TestInfiniteS3Object.new(s3_obj))
     end
 
-    it_behaves_like "an interruptible input plugin"
+    it_behaves_like "an interruptible input plugin" do
+      let(:allowed_lag) { 16 } if LOGSTASH_VERSION.split('.').first.to_i <= 6
+    end
   end
 
   describe "#register" do
