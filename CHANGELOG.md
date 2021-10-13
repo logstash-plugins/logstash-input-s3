@@ -1,3 +1,6 @@
+## 3.8.1
+ - Feat: cast true/false values for additional_settings [#232](https://github.com/logstash-plugins/logstash-input-s3/pull/232)
+
 ## 3.8.0
  - Add ECS v8 support.
 

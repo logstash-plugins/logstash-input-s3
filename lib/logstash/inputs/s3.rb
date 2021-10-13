@@ -353,14 +353,22 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   def symbolized_settings
-    @symbolized_settings ||= symbolize(@additional_settings)
+    @symbolized_settings ||= symbolize_keys_and_cast_true_false(@additional_settings)
   end
 
-  def symbolize(hash)
-    return hash unless hash.is_a?(Hash)
-    symbolized = {}
-    hash.each { |key, value| symbolized[key.to_sym] = symbolize(value) }
-    symbolized
+  def symbolize_keys_and_cast_true_false(hash)
+    case hash
+    when Hash
+      symbolized = {}
+      hash.each { |key, value| symbolized[key.to_sym] = symbolize_keys_and_cast_true_false(value) }
+      symbolized
+    when 'true'
+      true
+    when 'false'
+      false
+    else
+      hash
+    end
   end
 
   def ignore_filename?(filename)

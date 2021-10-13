@@ -84,10 +84,10 @@ describe LogStash::Inputs::S3 do
     end
 
     describe "additional_settings" do
-      context 'when force_path_style is set' do
+      context "supported settings" do
         let(:settings) {
           {
-            "additional_settings" => { "force_path_style" => true },
+            "additional_settings" => { "force_path_style" => 'true', "ssl_verify_peer" => 'false', "profile" => 'logstash' },
             "bucket" => "logstash-test",
           }
         }
@@ -95,7 +95,7 @@ describe LogStash::Inputs::S3 do
         it 'should instantiate AWS::S3 clients with force_path_style set' do
           expect(Aws::S3::Resource).to receive(:new).with({
             :region => subject.region,
-            :force_path_style => true
+            :force_path_style => true, :ssl_verify_peer => false, :profile => 'logstash'
           }).and_call_original
 
           subject.send(:get_s3object)
