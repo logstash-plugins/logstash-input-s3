@@ -139,6 +139,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     objects = []
     found = false
     current_time = Time.now
+    sincedb_time = sincedb.read
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
@@ -147,7 +148,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('Ignoring', :key => log.key)
         elsif log.content_length <= 0
           @logger.debug('Object Zero Length', :key => log.key)
-        elsif !sincedb.newer?(log.last_modified)
+        elsif log.last_modified <= sincedb_time
           @logger.debug('Object Not Modified', :key => log.key)
         elsif log.last_modified > (current_time - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
           @logger.debug('Object Modified After Cutoff Time', :key => log.key)
@@ -464,10 +465,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         @sincedb_path = file
       end
 
-      def newer?(date)
-        date > read
-      end
-
+      # @return [Time]
       def read
         if ::File.exists?(@sincedb_path)
           content = ::File.read(@sincedb_path).chomp.strip
@@ -479,7 +477,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       end
 
       def write(since = nil)
-        since = Time.now() if since.nil?
+        since = Time.now if since.nil?
         ::File.open(@sincedb_path, 'w') { |file| file.write(since.to_s) }
       end
     end

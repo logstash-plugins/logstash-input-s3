@@ -1,3 +1,6 @@
+## 3.8.2
+ - Refactor: read sincedb time once per bucket listing [#233](https://github.com/logstash-plugins/logstash-input-s3/pull/233)
+
 ## 3.8.1
  - Feat: cast true/false values for additional_settings [#232](https://github.com/logstash-plugins/logstash-input-s3/pull/232)
 
