@@ -195,6 +195,7 @@ describe LogStash::Inputs::S3 do
       it 'should log that no files were found in the bucket' do
         plugin = LogStash::Inputs::S3.new(config)
         plugin.register
+        allow(plugin.logger).to receive(:info).with(/Using the provided sincedb_path/, anything)
         expect(plugin.logger).to receive(:info).with(/No files found/, anything)
         expect(plugin.list_new_files).to be_empty
       end
