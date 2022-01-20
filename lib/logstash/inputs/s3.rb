@@ -235,29 +235,33 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('Event is metadata, updating the current cloudfront metadata', :event => event)
           update_metadata(metadata, event)
         else
-          decorate(event)
-
-          if @include_object_properties
-            event.set("[@metadata][s3]", object.data.to_h)
-          else
-            event.set("[@metadata][s3]", {})
-          end
-
-          event.set("[@metadata][s3][key]", object.key)
-          event.set(@cloudfront_version_key, metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
-          event.set(@cloudfront_fields_key, metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
-
-          queue << event
+          push_decoded_event(queue, metadata, object, event)
         end
       end
     end
     # #ensure any stateful codecs (such as multi-line ) are flushed to the queue
     @codec.flush do |event|
-      queue << event
+      push_decoded_event(queue, metadata, object, event)
     end
 
     return true
   end # def process_local_log
+
+  def push_decoded_event(queue, metadata, object, event)
+    decorate(event)
+
+    if @include_object_properties
+      event.set("[@metadata][s3]", object.data.to_h)
+    else
+      event.set("[@metadata][s3]", {})
+    end
+
+    event.set("[@metadata][s3][key]", object.key)
+    event.set(@cloudfront_version_key, metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
+    event.set(@cloudfront_fields_key, metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
+
+    queue << event
+  end
 
   def event_is_metadata?(event)
     return false unless event.get("message").class == String
