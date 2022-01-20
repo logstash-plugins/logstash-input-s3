@@ -9,6 +9,7 @@ require "stud/interval"
 require "stud/temporary"
 require "aws-sdk"
 require "logstash/inputs/s3/patch"
+require "logstash/plugin_mixins/ecs_compatibility_support"
 
 require 'java'
 
@@ -27,6 +28,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   java_import java.util.zip.ZipException
 
   include LogStash::PluginMixins::AwsConfig::V2
+  include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1, :v8 => :v1)
 
   config_name "s3"
 
@@ -88,6 +90,12 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   CUTOFF_SECOND = 3
 
+  def initialize(*params)
+    super
+    @cloudfront_fields_key = ecs_select[disabled: 'cloudfront_fields', v1: '[@metadata][s3][cloudfront][fields]']
+    @cloudfront_version_key = ecs_select[disabled: 'cloudfront_version', v1: '[@metadata][s3][cloudfront][version]']
+  end
+
   def register
     require "fileutils"
     require "digest/md5"
@@ -130,6 +138,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def list_new_files
     objects = []
     found = false
+    current_time = Time.now
+    sincedb_time = sincedb.read
     begin
       @s3bucket.objects(:prefix => @prefix).each do |log|
         found = true
@@ -138,9 +148,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('Ignoring', :key => log.key)
         elsif log.content_length <= 0
           @logger.debug('Object Zero Length', :key => log.key)
-        elsif !sincedb.newer?(log.last_modified)
+        elsif log.last_modified <= sincedb_time
           @logger.debug('Object Not Modified', :key => log.key)
-        elsif log.last_modified > (Time.now - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
+        elsif log.last_modified > (current_time - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
           @logger.debug('Object Modified After Cutoff Time', :key => log.key)
         elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
           @logger.debug('Object Archived to Glacier', :key => log.key)
@@ -236,12 +246,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     return true
   end # def process_local_log
-  
+
   def push_decoded_event(queue, metadata, object, event)
     decorate(event)
-
-    event.set("cloudfront_version", metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
-    event.set("cloudfront_fields", metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
     if @include_object_properties
       event.set("[@metadata][s3]", object.data.to_h)
@@ -250,6 +257,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     end
 
     event.set("[@metadata][s3][key]", object.key)
+    event.set(@cloudfront_version_key, metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
+    event.set(@cloudfront_fields_key, metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
 
     queue << event
   end
@@ -349,14 +358,22 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   def symbolized_settings
-    @symbolized_settings ||= symbolize(@additional_settings)
+    @symbolized_settings ||= symbolize_keys_and_cast_true_false(@additional_settings)
   end
 
-  def symbolize(hash)
-    return hash unless hash.is_a?(Hash)
-    symbolized = {}
-    hash.each { |key, value| symbolized[key.to_sym] = symbolize(value) }
-    symbolized
+  def symbolize_keys_and_cast_true_false(hash)
+    case hash
+    when Hash
+      symbolized = {}
+      hash.each { |key, value| symbolized[key.to_sym] = symbolize_keys_and_cast_true_false(value) }
+      symbolized
+    when 'true'
+      true
+    when 'false'
+      false
+    else
+      hash
+    end
   end
 
   def ignore_filename?(filename)
@@ -452,10 +469,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
         @sincedb_path = file
       end
 
-      def newer?(date)
-        date > read
-      end
-
+      # @return [Time]
       def read
         if ::File.exists?(@sincedb_path)
           content = ::File.read(@sincedb_path).chomp.strip
@@ -467,7 +481,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
       end
 
       def write(since = nil)
-        since = Time.now() if since.nil?
+        since = Time.now if since.nil?
         ::File.open(@sincedb_path, 'w') { |file| file.write(since.to_s) }
       end
     end

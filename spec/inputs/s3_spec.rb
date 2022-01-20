@@ -9,6 +9,7 @@ require_relative "../support/helpers"
 require "stud/temporary"
 require "aws-sdk"
 require "fileutils"
+require 'logstash/plugin_mixins/ecs_compatibility_support/spec_helper'
 
 describe LogStash::Inputs::S3 do
   let(:temporary_directory) { Stud::Temporary.pathname }
@@ -41,7 +42,9 @@ describe LogStash::Inputs::S3 do
       expect_any_instance_of(LogStash::Inputs::S3).to receive(:list_new_files).and_return(TestInfiniteS3Object.new(s3_obj))
     end
 
-    it_behaves_like "an interruptible input plugin"
+    it_behaves_like "an interruptible input plugin" do
+      let(:allowed_lag) { 16 } if LOGSTASH_VERSION.split('.').first.to_i <= 6
+    end
   end
 
   describe "#register" do
@@ -81,10 +84,10 @@ describe LogStash::Inputs::S3 do
     end
 
     describe "additional_settings" do
-      context 'when force_path_style is set' do
+      context "supported settings" do
         let(:settings) {
           {
-            "additional_settings" => { "force_path_style" => true },
+            "additional_settings" => { "force_path_style" => 'true', "ssl_verify_peer" => 'false', "profile" => 'logstash' },
             "bucket" => "logstash-test",
           }
         }
@@ -92,7 +95,7 @@ describe LogStash::Inputs::S3 do
         it 'should instantiate AWS::S3 clients with force_path_style set' do
           expect(Aws::S3::Resource).to receive(:new).with({
             :region => subject.region,
-            :force_path_style => true
+            :force_path_style => true, :ssl_verify_peer => false, :profile => 'logstash'
           }).and_call_original
 
           subject.send(:get_s3object)
@@ -192,6 +195,7 @@ describe LogStash::Inputs::S3 do
       it 'should log that no files were found in the bucket' do
         plugin = LogStash::Inputs::S3.new(config)
         plugin.register
+        allow(plugin.logger).to receive(:info).with(/Using the provided sincedb_path/, anything)
         expect(plugin.logger).to receive(:info).with(/No files found/, anything)
         expect(plugin.list_new_files).to be_empty
       end
@@ -495,12 +499,20 @@ describe LogStash::Inputs::S3 do
     context 'cloudfront' do
       let(:log_file) { File.join(File.dirname(__FILE__), '..', 'fixtures', 'cloudfront.log') }
 
-      it 'should extract metadata from cloudfront log' do
-        events = fetch_events(config)
+      describe "metadata", :ecs_compatibility_support, :aggregate_failures do
+        ecs_compatibility_matrix(:disabled, :v1) do |ecs_select|
+          before(:each) do
+            allow_any_instance_of(described_class).to receive(:ecs_compatibility).and_return(ecs_compatibility)
+          end
 
-        events.each do |event|
-          expect(event.get('cloudfront_fields')).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
-          expect(event.get('cloudfront_version')).to eq('1.0')
+          it 'should extract metadata from cloudfront log' do
+            events = fetch_events(config)
+
+            events.each do |event|
+              expect(event.get ecs_select[disabled: "cloudfront_fields", v1: "[@metadata][s3][cloudfront][fields]"] ).to eq('date time x-edge-location c-ip x-event sc-bytes x-cf-status x-cf-client-id cs-uri-stem cs-uri-query c-referrer x-page-url​  c-user-agent x-sname x-sname-query x-file-ext x-sid')
+              expect(event.get ecs_select[disabled: "cloudfront_version", v1: "[@metadata][s3][cloudfront][version]"] ).to eq('1.0')
+            end
+          end
         end
       end
 

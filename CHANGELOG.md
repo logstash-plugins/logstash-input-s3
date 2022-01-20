@@ -1,3 +1,16 @@
+## 3.8.2
+ - Refactor: read sincedb time once per bucket listing [#233](https://github.com/logstash-plugins/logstash-input-s3/pull/233)
+
+## 3.8.1
+ - Feat: cast true/false values for additional_settings [#232](https://github.com/logstash-plugins/logstash-input-s3/pull/232)
+
+## 3.8.0
+ - Add ECS v8 support.
+
+## 3.7.0
+ - Add ECS support. [#228](https://github.com/logstash-plugins/logstash-input-s3/pull/228)
+ - Fix missing file in cutoff time change. [#224](https://github.com/logstash-plugins/logstash-input-s3/pull/224)
+
 ## 3.6.0
  - Fixed unprocessed file with the same `last_modified` in ingestion. [#220](https://github.com/logstash-plugins/logstash-input-s3/pull/220)
 
