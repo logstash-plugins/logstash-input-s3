@@ -1,5 +1,5 @@
 ## 3.8.4
- - Refactoring, reuse code to manage `additional_settings` from mixin-aws [#n](https://github.com/logstash-plugins/logstash-input-s3/pull/n)
+ - Refactoring, reuse code to manage `additional_settings` from mixin-aws [#237](https://github.com/logstash-plugins/logstash-input-s3/pull/237)
 
 ## 3.8.3
  - Fix missing `metadata` and `type` of the last event [#223](https://github.com/logstash-plugins/logstash-input-s3/pull/223)
