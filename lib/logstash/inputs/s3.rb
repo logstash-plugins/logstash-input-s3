@@ -357,25 +357,6 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     path
   end
 
-  def symbolized_settings
-    @symbolized_settings ||= symbolize_keys_and_cast_true_false(@additional_settings)
-  end
-
-  def symbolize_keys_and_cast_true_false(hash)
-    case hash
-    when Hash
-      symbolized = {}
-      hash.each { |key, value| symbolized[key.to_sym] = symbolize_keys_and_cast_true_false(value) }
-      symbolized
-    when 'true'
-      true
-    when 'false'
-      false
-    else
-      hash
-    end
-  end
-
   def ignore_filename?(filename)
     if @prefix == filename
       return true
@@ -441,8 +422,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   def get_s3object
-    options = symbolized_settings.merge(aws_options_hash || {})
-    s3 = Aws::S3::Resource.new(options)
+    s3 = Aws::S3::Resource.new(aws_options_hash || {})
   end
 
   def file_restored?(object)
