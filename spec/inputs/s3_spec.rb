@@ -4,10 +4,9 @@ require "logstash/devutils/rspec/shared_examples"
 require "logstash/inputs/s3"
 require "logstash/codecs/multiline"
 require "logstash/errors"
-require "aws-sdk-resources"
 require_relative "../support/helpers"
 require "stud/temporary"
-require "aws-sdk"
+require "aws-sdk-s3"
 require "fileutils"
 require 'logstash/plugin_mixins/ecs_compatibility_support/spec_helper'
 
@@ -94,6 +93,7 @@ describe LogStash::Inputs::S3 do
 
         it 'should instantiate AWS::S3 clients with force_path_style set' do
           expect(Aws::S3::Resource).to receive(:new).with({
+            :credentials => kind_of(Aws::Credentials),
             :region => subject.region,
             :force_path_style => true, :ssl_verify_peer => false, :profile => 'logstash'
           }).and_call_original
