@@ -375,8 +375,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   def process_log(queue, log)
     @logger.debug("Processing", :bucket => @bucket, :key => log.key)
+    object = @s3bucket.object(log.key)
     # Eager-loads the object data so the last_modified field is populated right before the download
-    object = @s3bucket.object(log.key).load
+    object.load
 
     filename = File.join(temporary_directory, File.basename(log.key))
     if download_remote_file(object, filename)

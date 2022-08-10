@@ -407,6 +407,7 @@ describe LogStash::Inputs::S3 do
       }
       allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { objects }
       allow_any_instance_of(Aws::S3::Bucket).to receive(:object).with(log.key) { log }
+      allow_any_instance_of(Aws::S3::Object).to receive(:load)
       expect(log).to receive(:get).with(instance_of(Hash)) do |arg|
         File.open(arg[:response_target], 'wb') { |s3file| s3file.write(data) }
       end
@@ -569,6 +570,7 @@ describe LogStash::Inputs::S3 do
 
         allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { s3_objects }
         allow_any_instance_of(Aws::S3::Bucket).to receive(:object).and_return(*s3_objects)
+        allow_any_instance_of(Aws::S3::Object).to receive(:load)
         expect(s3_plugin).to receive(:process_log).at_least(size).and_call_original
         expect(s3_plugin).to receive(:stop?).and_return(false).at_least(size)
         expect(s3_plugin).to receive(:download_remote_file).and_return(true).at_least(size)
@@ -601,6 +603,7 @@ describe LogStash::Inputs::S3 do
 
         allow_any_instance_of(Aws::S3::Bucket).to receive(:objects) { s3_summary }
         allow_any_instance_of(Aws::S3::Bucket).to receive(:object).and_return(*s3_objects)
+        allow_any_instance_of(Aws::S3::Object).to receive(:load)
         expect(s3_plugin).to receive(:process_log).at_least(size).and_call_original
         expect(s3_plugin).to receive(:stop?).and_return(false).at_least(size)
         expect(s3_plugin).to receive(:download_remote_file).and_return(true).at_least(size)
