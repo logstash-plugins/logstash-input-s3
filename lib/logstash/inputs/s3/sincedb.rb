@@ -99,12 +99,13 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     private
     attr_reader :options
 
-    def start_bookkeeping 
+    def start_bookkeeping
+      raise 'never let this run'
       @stopped.make_false
 
       Thread.new do
         LogStash::Util.set_thread_name("S3 input, sincedb periodic fsync")
-        Stud.interval(1) { periodic_sync }
+        Stud.interval(1) { puts 'Running bookkeeper'; periodic_sync }
       end
     end
 

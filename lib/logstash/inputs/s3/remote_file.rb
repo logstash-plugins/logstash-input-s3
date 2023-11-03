@@ -85,7 +85,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       # Usually I would use the content_type to retrieve this information.
       # but this require another call to S3 for each download which isn't really optimal.
       # So we will use the filename to do a best guess at the content type.
-      ::File.extname(remote_object.key).downcase == @gzip_pattern
+      ::File.extname(remote_object.key).downcase =~ Regexp.new(@gzip_pattern)
     end
 
     def inspect

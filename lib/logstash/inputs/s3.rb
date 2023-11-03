@@ -46,6 +46,10 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # unless otherwise configured.
   config :region, :validate => :string, :default => 'us-east-1'
 
+  config :access_key_id, :validate => :string, :default => nil
+
+  config :secret_access_key, :validate => :string, :default => nil
+
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
 

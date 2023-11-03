@@ -1,5 +1,6 @@
 # encoding: utf-8
 require "logstash/inputs/s3"
+require "logstash/inputs/s3/sincedb"
 require_relative "../support/matcher_helpers"
 require_relative "../support/s3_input_test_helper"
 require "stud/temporary"
@@ -16,6 +17,12 @@ REGION = ENV.fetch("AWS_LOGSTASH_REGION", "us-east-1")
 
 describe "Retrieve logs from S3", :tags => :integration do
   let(:queue) { Queue.new }
+  let(:stub_since_db) { double("since_db") }
+
+  before do
+    # Stub this out so that we can avoid starting the bookkeeper thread which doesn't die
+    allow(LogStash::Inputs::S3::SinceDB).to receive(:new).with(anything).and_return(stub_since_db)
+  end
 
   let(:plugin) { LogStash::Inputs::S3.new(plugin_config) }
 
@@ -35,7 +42,7 @@ describe "Retrieve logs from S3", :tags => :integration do
     let(:region) { REGION }
 
     let(:plugin_config) do
-      super.merge({
+      super().merge({
         "access_key_id" => access_key_id,
         "secret_access_key" => secret_access_key,
         "region" => region,

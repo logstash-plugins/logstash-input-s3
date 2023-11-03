@@ -5,7 +5,9 @@ require "logstash/inputs/s3/sincedb"
 require "stud/temporary"
 
 describe LogStash::Inputs::S3::ProcessingPolicyValidator do
-  let(:remote_file) { RemoteFile.new(s3_object) }
+  let(:logger) { double("logger").as_null_object }
+  let(:gzip_pattern) { "*.gz" }
+  let(:remote_file) { LogStash::Inputs::S3::RemoteFile.new(s3_object, logger, gzip_pattern) }
   let(:s3_object) { double("s3_object", :key => "hola", :content_length => 20, :last_modified => Time.now-60) }
 
   let(:validator_1) { LogStash::Inputs::S3::ProcessingPolicyValidator::SkipEmptyFile }
@@ -15,16 +17,16 @@ describe LogStash::Inputs::S3::ProcessingPolicyValidator do
     subject { described_class }
 
     it "accepts multiples validator" do
-      expect(subject.new(validator_1, validator_2).count).to eq(2)
+      expect(subject.new(logger, validator_1, validator_2).count).to eq(2)
     end
 
     it "accepts one validator" do
-      expect(subject.new(validator_1).count).to eq(1)
+      expect(subject.new(logger, validator_1).count).to eq(1)
     end
   end
 
   context "#add_policy" do
-    subject { described_class.new(validator_1) } 
+    subject { described_class.new(logger, validator_1) } 
 
     it "allows to add more validators" do
       expect(subject.count).to eq(1)
@@ -43,7 +45,7 @@ describe LogStash::Inputs::S3::ProcessingPolicyValidator do
   end
 
   context "#process?" do
-    subject { described_class.new(validator_1, validator_2) }
+    subject { described_class.new(logger, validator_1, validator_2) }
 
     it "execute the validator in declarations order" do
       expect(validator_1).to receive(:process?).ordered.and_return(true)
@@ -133,7 +135,14 @@ describe LogStash::Inputs::S3::ProcessingPolicyValidator do
     let(:older_than) { 3600 }
     let(:s3_object) { double("remote_file", :etag => "1234", :bucket_name => "mon-bucket", :key => "hola", :content_length => 100, :last_modified => Time.now) }
     let(:sincedb_path) { Stud::Temporary.file.path }
-    let(:sincedb) { LogStash::Inputs::S3::SinceDB.new(sincedb_path, older_than) }
+    let(:logger) { double("logger").as_null_object }
+
+    before do
+      # Avoid starting the bookkeeping thread since it will keep running after the test
+      allow_any_instance_of(LogStash::Inputs::S3::SinceDB).to receive(:start_bookkeeping)
+    end
+
+    let(:sincedb) { LogStash::Inputs::S3::SinceDB.new(sincedb_path, older_than, logger) }
 
     subject { described_class.new(sincedb) }
 

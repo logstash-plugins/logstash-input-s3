@@ -11,18 +11,22 @@ describe LogStash::Inputs::S3::Processor do
   let(:post_processors) { [post_processor_1, post_processor_2] }
 
   let(:validator) { LogStash::Inputs::S3::ProcessingPolicyValidator.new(LogStash::Inputs::S3::ProcessingPolicyValidator::SkipEmptyFile) }
-  let(:remote_file) { LogStash::Inputs::S3::RemoteFile.new(s3_object) }
+  let(:logger) { double("Logger").as_null_object }
+  let(:gzip_pattern) { "*.gz" }
+  let(:remote_file) { LogStash::Inputs::S3::RemoteFile.new(s3_object, logger, gzip_pattern) }
   let(:s3_object) { double("s3_object",
+                           :data => { "bucket_name" => "mon-bucket" },
                            :key => "hola",
                            :bucket_name => "mon-bucket",
                            :content_length => 20,
                            :last_modified => Time.now-60) }
 
-  subject { described_class.new(validator, event_processor, post_processors) }
+  subject { described_class.new(validator, event_processor, logger, post_processors) }
 
   context "When handling remote file" do
-    context "when the file is not valid to process" do
+    context "when the file is not valid to process (because content_length = 0)" do
       let(:s3_object) { double("s3_object",
+                               :data => { "bucket_name" => "mon-bucket" },
                                :key => "hola",
                                :content_length => 0,
                                :last_modified => Time.now-60) }
@@ -44,7 +48,7 @@ describe LogStash::Inputs::S3::Processor do
 
       it "send the file content to the event processor" do
         subject.handle(remote_file)
-        expect(event_processor).to have_received(:process).with(content, { "s3" => hash_including(metadata["s3"])})
+        expect(event_processor).to have_received(:process).with(content, { "s3" => hash_including(metadata["s3"])}, s3_object.data)
       end
 
       it "sends the file to all post processors" do
