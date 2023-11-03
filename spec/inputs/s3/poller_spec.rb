@@ -1,7 +1,7 @@
 # encoding: utf-8
 #
 require "logstash/inputs/s3"
-require "aws-sdk"
+require "aws-sdk-s3"
 require "ostruct"
 require "rspec/wait"
 

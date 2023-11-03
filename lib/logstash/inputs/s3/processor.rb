@@ -1,7 +1,7 @@
 # encoding: utf-8
 require "logstash/inputs/base"
 
-require "aws-sdk"
+require "aws-sdk-s3"
 
 module LogStash module Inputs class S3 < LogStash::Inputs::Base
   # The processor represent a workers thread
