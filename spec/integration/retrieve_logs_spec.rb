@@ -11,20 +11,31 @@ require "thread"
 # be.
 ACCESS_KEY_ID = ENV.delete("AWS_ACCESS_KEY_ID")
 SECRET_ACCESS_KEY = ENV.delete("AWS_SECRET_ACCESS_KEY")
-BUCKET_SOURCE = ENV.delete("AWS_LOGSTASH_TEST_BUCKET")
+BUCKET_SOURCE = ENV.fetch("AWS_LOGSTASH_TEST_BUCKET", "logstash-input-s3-test")
 BACKUP_BUCKET = "ls-ph-test"
 REGION = ENV.fetch("AWS_LOGSTASH_REGION", "us-east-1")
 
 describe "Retrieve logs from S3", :tags => :integration do
   let(:queue) { Queue.new }
-  let(:stub_since_db) { double("since_db") }
+  let(:logger) { instance_double('LogStash::Logging::Logger') }
+  let(:sincedb_args) { [
+    plugin_config["sincedb_path"],
+    86400,
+    logger,
+    { :sincedb_expire_secs => 120 }
+  ] }
+  let(:stub_since_db) { instance_double('LogStash::Inputs::S3::SinceDB') }
 
   before do
+    skip "AWS credentials not found" unless ACCESS_KEY_ID && SECRET_ACCESS_KEY
+
     # Stub this out so that we can avoid starting the bookkeeper thread which doesn't die
-    allow(LogStash::Inputs::S3::SinceDB).to receive(:new).with(anything).and_return(stub_since_db)
+    allow(LogStash::Inputs::S3::SinceDB).to receive(:new).with(*sincedb_args).and_return(stub_since_db)
+    allow(stub_since_db).to receive(:close).and_return(true)
+    @plugin = LogStash::Inputs::S3.new(plugin_config)
   end
 
-  let(:plugin) { LogStash::Inputs::S3.new(plugin_config) }
+  # let(:plugin) { LogStash::Inputs::S3.new(plugin_config) }
 
   let(:plugin_config) do
     { 
@@ -61,17 +72,17 @@ describe "Retrieve logs from S3", :tags => :integration do
       @thread_abort_on_exception = Thread.abort_on_exception
       Thread.abort_on_exception = true
 
-      plugin.register
+      @plugin.register
 
       s3_input_test_helper.setup
 
       @plugin_thread = Thread.new do
-        plugin.run(queue)
+        @plugin.run(queue)
       end
     end
 
     after :each do
-      plugin.stop
+      @plugin.stop if @plugin
       Thread.abort_on_exception = @thread_abort_on_exception
     end
 
