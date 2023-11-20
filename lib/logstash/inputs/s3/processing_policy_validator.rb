@@ -76,12 +76,12 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     def process?(remote_file)
       # TODO log were we stop
       @policies.all? do |policy|
-        if policy.process?(remote_file)
-          true
-        else
+        if !policy.process?(remote_file)
           @logger.debug("Skipping file because of policy", :remote_file => remote_file, :policy => policy.class)
           return false
         end
+
+        true
       end
     end
 
