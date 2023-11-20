@@ -53,7 +53,8 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     end
 
     DEFAULT_OPTIONS = {
-      :sincedb_expire_secs => 120
+      :sincedb_expire_secs => 120,
+      :bookkeeping_enabled => true # RSpec stubbing doesn't like background tasks
     }
 
     def initialize(file, ignore_older, logger, options = {})
@@ -68,7 +69,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       @need_sync = Concurrent::AtomicBoolean.new(false)
       @stopped = Concurrent::AtomicBoolean.new(true)
 
-      start_bookkeeping
+      start_bookkeeping if options[:bookkeeping_enabled]
     end
 
     def close
