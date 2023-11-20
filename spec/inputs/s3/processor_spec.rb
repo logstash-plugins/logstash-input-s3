@@ -9,9 +9,15 @@ describe LogStash::Inputs::S3::Processor do
   let(:post_processor_1) { spy("LogStash::Inputs::S3::PostProcessor") }
   let(:post_processor_2) { spy("LogStash::Inputs::S3::PostProcessor") }
   let(:post_processors) { [post_processor_1, post_processor_2] }
+  let(:logger) { double("logger").as_null_object }
 
-  let(:validator) { LogStash::Inputs::S3::ProcessingPolicyValidator.new(LogStash::Inputs::S3::ProcessingPolicyValidator::SkipEmptyFile) }
-  let(:logger) { double("Logger").as_null_object }
+  let(:validator) {
+    LogStash::Inputs::S3::ProcessingPolicyValidator.new(
+      logger,
+      LogStash::Inputs::S3::ProcessingPolicyValidator::SkipEmptyFile
+    )
+  }
+
   let(:gzip_pattern) { "*.gz" }
   let(:remote_file) { LogStash::Inputs::S3::RemoteFile.new(s3_object, logger, gzip_pattern) }
   let(:s3_object) { double("s3_object",

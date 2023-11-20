@@ -16,7 +16,9 @@ describe LogStash::Inputs::S3::EventProcessor do
   let(:remote_file_data) { { "bucket_name" => "bucket-land" } }
 
   before do
-    described_class.new(logstash_inputs_s3, codec, queue, include_object_properties, logger).process(encoded_line, metadata, remote_file_data)
+    allow(logstash_inputs_s3).to receive(:decorate)
+    described_class.new(logstash_inputs_s3, codec, queue, include_object_properties, logger)
+      .process(encoded_line, metadata, remote_file_data)
   end
 
   subject { queue.pop }
@@ -30,10 +32,10 @@ describe LogStash::Inputs::S3::EventProcessor do
   end
 
   it "uses the codec and insert the event to the queue" do
-    expect(subject["message"]).to eq("Hello World")
+    expect(subject.get("message")).to eq("Hello World")
   end
 
   it "add metadata to the event" do
-    expect(subject["[@metadata][s3][bucket_name]"]).to eq("bucket-land")
+    expect(subject.get("[@metadata][s3][bucket_name]")).to eq("bucket-land")
   end
 end
