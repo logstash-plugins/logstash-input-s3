@@ -125,6 +125,8 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
         data = JSON.parse(line)
         @db[SinceDBKey.new(*data["key"])] = SinceDBValue.new(Time.parse(*data["value"]))
       end
+
+      @logger.debug("Loaded sincedb", :location => @file, :entries => @db.size)
     end
 
     def newest_entry
