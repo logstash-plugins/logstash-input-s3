@@ -255,6 +255,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
     if start_object
       @logger.info("Reseeding sincedb and shutting down", :value => @sincedb_start_value)
+      ::File.unlink(@sincedb_path) rescue nil
       @sincedb.reseed(start_object)
       return
     end
