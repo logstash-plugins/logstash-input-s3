@@ -101,7 +101,6 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     attr_reader :options
 
     def start_bookkeeping
-      raise 'never let this run'
       @stopped.make_false
 
       Thread.new do
