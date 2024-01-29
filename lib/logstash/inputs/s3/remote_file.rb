@@ -34,8 +34,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     end
 
     def download!
-      @logger.debug("Downloading remote file", :remote_object => remote_object)
-      @file = StreamDownloader.fetcher(self).fetch
+      @file = StreamDownloader.fetcher(self, @logger).fetch
       @downloaded = true
     end
 
