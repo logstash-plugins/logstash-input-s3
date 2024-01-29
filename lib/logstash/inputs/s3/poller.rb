@@ -50,7 +50,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       remote_objects.limit(options[:batch_size]).each do |object|
         return if stop?
 
-        block.call(RemoteFile.new(object, @logger, @gzip_pattern))
+        block.call(RemoteFile.new(object, @logger, @options[:gzip_pattern]))
 
         if options[:use_start_after]
           @last_key_fetched = object.key
