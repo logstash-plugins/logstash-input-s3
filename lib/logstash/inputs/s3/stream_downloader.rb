@@ -11,7 +11,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     end
 
     def fetch
-      logger.debug("Downloading remote file", :remote_object_key => @remote_object.key)
+      @logger.debug("Downloading remote file", :remote_object_key => @remote_object.key)
       @remote_object.get({ :response_target => @writer })
       # @writer.rewind
       @writer
