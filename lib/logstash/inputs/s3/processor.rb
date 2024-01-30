@@ -18,8 +18,6 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       return if !validator.process?(remote_file)
       @logger.debug("Remote file passed validation. Downloading data.", :remote_file => remote_file)
 
-      puts "remote_file.content_length: #{remote_file.content_length} which is > 0. Downloading!"
-
       remote_file.download!
 
       @logger.debug("File downloaded. Emitting events.", :remote_file => remote_file)
