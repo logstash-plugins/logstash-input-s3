@@ -53,7 +53,16 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
         block.call(RemoteFile.new(object, @logger, @options[:gzip_pattern]))
 
         if options[:use_start_after]
+          if @last_key_fetched && (
+            (@last_key_fetched <=> object.key) !=
+            (last_mtime_fetched <=> object.last_modified)
+          )
+            @logger.warn("S3 object listing is not consistent. Results may be incomplete or out of order",
+                          :last_object => last_object, :previous_object => previous_object)
+          end
+
           @last_key_fetched = object.key
+          last_mtime_fetched = object.last_modified
           @logger.debug("Setting last_key_fetched", :last_key_fetched => @last_key_fetched)
         end
 
