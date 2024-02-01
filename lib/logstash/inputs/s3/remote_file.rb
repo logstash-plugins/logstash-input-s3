@@ -56,6 +56,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
         block.call(line, metadata)
         @keep_alive.notify!
       end
+
       @keep_alive.complete!
     end
 

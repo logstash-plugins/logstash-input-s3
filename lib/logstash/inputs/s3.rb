@@ -147,6 +147,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # the oldest expected age of any file in the bucket.
   config :sincedb_expire_secs, :validate => :number, :default => 120
 
+  # Number of times to retry processing a downloaded file when a broken pipe error occurs.
+  config :broken_pipe_retries, :validate => :number, :default => 10
+
   public
   def initialize(options = {})
     super
@@ -222,7 +225,8 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     )
 
     @manager = ProcessorManager.new(@logger, { :processor => processor,
-                                               :processors_count => @processors_count})
+                                               :processors_count => @processors_count,
+                                               :broken_pipe_retries => @broken_pipe_retries })
     @manager.start
 
     # The poller get all the new files from the S3 buckets,

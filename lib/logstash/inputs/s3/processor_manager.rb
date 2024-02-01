@@ -13,7 +13,10 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     java_import java.util.concurrent.SynchronousQueue
     java_import java.util.concurrent.TimeUnit
 
-    DEFAULT_OPTIONS = { :processors_count => 5 }
+    DEFAULT_OPTIONS = {
+      :processors_count => 5,
+      :broken_pipe_retries => 10
+    }
 
     TIMEOUT_MS = 150 # milliseconds, use for the SynchronousQueue
 
@@ -23,6 +26,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       @logger = logger
       options = DEFAULT_OPTIONS.merge(options)
       @processor = options[:processor]
+      @broken_pipe_retries = options[:broken_pipe_retries]
       @processors_count = options[:processors_count]
 
       @available_processors = []
@@ -70,8 +74,26 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
           @logger.debug("New work received", :worker_id => worker_id, :remote_file => remote_file)
           LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Working on: #{remote_file.bucket_name}/#{remote_file.key} size: #{remote_file.content_length}")
 
+          tries = 0
           begin
             @processor.handle(remote_file)
+          rescue IOError => e
+            @logger.error(
+              "IOError when processing remote file. Skipping for now (But not adding to SinceDB).",
+              :remote_file => remote_file,
+              :exception => e
+            )
+          rescue Errno::EPIPE => e
+            @logger.error(
+              "Broken pipe when processing remote file",
+              :remote_file => remote_file,
+              :exception => e
+            )
+
+            raise e if (tries += 1) == @broken_pipe_retries
+
+            sleep 1
+            retry
           rescue Aws::S3::Errors::NoSuchKey
             @logger.debug(
               "File not found on S3 (probably already handled by another worker)",
