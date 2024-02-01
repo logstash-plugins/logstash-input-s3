@@ -142,7 +142,9 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   config :purge_sincedb, :validate => :boolean, :default => false
 
   # Expire SinceDB entries that are sincedb_expire_secs older than the newest entry.
-  # This keeps the database from getting too large and slowing down processing.
+  # This keeps the database from getting too large and slowing down processing. To avoid
+  # duplicate log entries when not using use_start_after, set this to a value larger than
+  # the oldest expected age of any file in the bucket.
   config :sincedb_expire_secs, :validate => :number, :default => 120
 
   public
