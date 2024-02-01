@@ -76,7 +76,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     def cleanup
       if @download_to
         @download_to.close unless @download_to.closed?
-        ::File.delete(@download_to.path)
+        ::File.delete(@download_to.path) if ::File.exist?(@download_to.path)
       end
     end
 
