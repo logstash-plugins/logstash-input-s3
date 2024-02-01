@@ -64,7 +64,8 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       loop do
         break if stop?
 
-        @logger.debug("Waiting for new work", :worker_id => worker_id)
+        # This can be useful for debugging but it is extremely verbose
+        # @logger.debug("Waiting for new work", :worker_id => worker_id)
         if remote_file = @work_queue.poll(TIMEOUT_MS, TimeUnit::MILLISECONDS)
           @logger.debug("New work received", :worker_id => worker_id, :remote_file => remote_file)
           LogStash::Util.set_thread_name("[S3 Input Processor - #{worker_id}/#{processors_count}] Working on: #{remote_file.bucket_name}/#{remote_file.key} size: #{remote_file.content_length}")
