@@ -73,8 +73,12 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     end
 
     def remote_objects
-      @logger.info("Instantiating S3 object collection", :bucket_listing_options => bucket_listing_options)
-      @bucket.objects(bucket_listing_options)
+      @logger.info("Instantiating S3 object collection",
+                   :bucket_listing_options => bucket_listing_options,
+                   :polling_interval => options[:polling_interval])
+      objects = @bucket.objects(bucket_listing_options)
+      @logger.info("S3 object collection instantiated", :objects_count => objects.count)
+      objects
     end
 
     def bucket_listing_options
