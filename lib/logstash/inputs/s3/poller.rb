@@ -28,11 +28,11 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
       Stud.interval(options[:polling_interval]) do
         Stud.stop! if stop?
 
-        retrieved_count = retrieve_objects(&block)
-
-        # If we retrieved the amount of the batch size, it means there are still
-        # more objects to retrieve so don't wait for the next interval
-        redo if retrieved_count == options[:batch_size]
+        if options[:use_start_after]
+          retrieve_objects_using_use_start_after(&block)
+        else
+          retrieve_objects(&block)
+        end
       end
     end
 
@@ -46,30 +46,40 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
     def retrieve_objects(&block)
       @logger.debug("Retrieving objects from S3", :options => options)
 
-      retrieved_count = 0
+      remote_objects.each do |object|
+        return if stop?
+
+        block.call(RemoteFile.new(object, @logger, @options[:gzip_pattern]))
+      end
+    end
+
+    def retrieve_objects_using_use_start_after(&block)
+      @logger.debug("Retrieving objects from S3 using use_start_after", :options => options)
+
+      last_mtime_fetched = nil
+
       remote_objects.limit(options[:batch_size]).each do |object|
         return if stop?
 
         block.call(RemoteFile.new(object, @logger, @options[:gzip_pattern]))
 
-        if options[:use_start_after]
-          if @last_key_fetched && (
-            (@last_key_fetched <=> object.key) !=
-            (last_mtime_fetched <=> object.last_modified)
-          )
-            @logger.warn("S3 object listing is not consistent. Results may be incomplete or out of order",
-                          :last_object => last_object, :previous_object => previous_object)
-          end
+        next unless options[:use_start_after]
 
-          @last_key_fetched = object.key
-          last_mtime_fetched = object.last_modified
-          @logger.debug("Setting last_key_fetched", :last_key_fetched => @last_key_fetched)
+        if @last_key_fetched && (
+          (@last_key_fetched <=> object.key) !=
+          (last_mtime_fetched <=> object.last_modified)
+        )
+          @logger.warn("S3 object listing is not consistent. Results may be incomplete or out of order",
+                        :previous_object_key => @last_key_fetched,
+                        :previous_object_mtime => last_mtime_fetched,
+                        :current_object_key => object.key,
+                        :current_object_last_modified => object.last_modified)
         end
 
-        retrieved_count += 1
+        @last_key_fetched = object.key
+        last_mtime_fetched = object.last_modified
+        @logger.debug("Setting last_key_fetched", :last_key_fetched => @last_key_fetched)
       end
-
-      retrieved_count
     end
 
     def remote_objects
