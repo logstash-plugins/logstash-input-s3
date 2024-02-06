@@ -20,7 +20,7 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
 
       remote_file.download!
 
-      @logger.debug("File downloaded. Emitting events.", :remote_file => remote_file)
+      @logger.info("File downloaded. Emitting events.", :remote_file => remote_file)
       remote_file.each_line do |line|
         emit_event(line, remote_file.metadata, remote_file.data)
       end
