@@ -28,9 +28,30 @@ module LogStash module Inputs class S3 < LogStash::Inputs::Base
 
   class CompressedStreamDownloader < StreamDownloader
     def fetch
-      original_file = super
+      compressed_file_io_object = super
       @logger.debug("Decompressing gzip file", :remote_object_key => @remote_object.key)
-      Zlib::GzipReader.new(original_file)
+      decompress_io_object(compressed_file_io_object)
+    end
+
+    private
+
+    def decompress_io_object(io_object)
+      # Shelling out is necessary here until logstash-oss is using JRuby 9.4 which includes
+      # the Zlib::GzipReader.zcat method
+      output = ''
+      IO.popen('zcat', 'r+') do |zcat|
+        writer_thread = Thread.new do
+          while chunk = io_object.read(65536)
+            zcat.write(chunk)
+          end
+          zcat.close_write
+        end
+
+        output = zcat.read
+        writer_thread.join
+      end
+
+      output
     end
   end
 end;end;end
