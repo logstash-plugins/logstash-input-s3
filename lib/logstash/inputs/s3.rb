@@ -1,14 +1,12 @@
 # encoding: utf-8
 require "logstash/inputs/base"
 require "logstash/namespace"
-require "logstash/plugin_mixins/aws_config"
 require "time"
 require "date"
 require "tmpdir"
 require "stud/interval"
 require "stud/temporary"
-require "aws-sdk"
-require "logstash/inputs/s3/patch"
+require "aws-sdk-s3"
 require "logstash/plugin_mixins/ecs_compatibility_support"
 
 require 'java'
@@ -27,8 +25,15 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   java_import java.util.zip.GZIPInputStream
   java_import java.util.zip.ZipException
 
-  include LogStash::PluginMixins::AwsConfig::V2
   include LogStash::PluginMixins::ECSCompatibilitySupport(:disabled, :v1, :v8 => :v1)
+
+  require "logstash/inputs/s3/poller"
+  require "logstash/inputs/s3/processor"
+  require "logstash/inputs/s3/processor_manager"
+  require "logstash/inputs/s3/processing_policy_validator"
+  require "logstash/inputs/s3/event_processor"
+  require "logstash/inputs/s3/sincedb"
+  require "logstash/inputs/s3/post_processor"
 
   config_name "s3"
 
@@ -36,6 +41,14 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
 
   # The name of the S3 bucket.
   config :bucket, :validate => :string, :required => true
+
+  # The AWS region name for the bucket. For most S3 buckets this is us-east-1
+  # unless otherwise configured.
+  config :region, :validate => :string, :default => 'us-east-1'
+
+  config :access_key_id, :validate => :string, :default => nil
+
+  config :secret_access_key, :validate => :string, :default => nil
 
   # If specified, the prefix of filenames in the bucket must match (not a regexp)
   config :prefix, :validate => :string, :default => nil
@@ -88,24 +101,78 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   # default to an expression that matches *.gz and *.gzip file extensions
   config :gzip_pattern, :validate => :string, :default => "\.gz(ip)?$"
 
-  CUTOFF_SECOND = 3
+  # When the S3 input discovers a file that was last modified less than ignore_newer
+  # it will ignore it, causing it to be processed on the next attempt. This helps
+  # prevent the input from getting stuck on files that are actively being written to.
+  config :ignore_newer, :validate => :number, :default => 3
 
-  def initialize(*params)
+  # When the S3 input discovers a file that was last modified
+  # before the specified timespan in seconds, the file is ignored.
+  # After it's discovery, if an ignored file is modified it is no
+  # longer ignored and any new data is read. The default is 24 hours.
+  config :ignore_older, :validate => :number, :default => 24 * 60 * 60
+
+  # Use the object key as the SinceDB key, rather than the last_modified date.
+  # If this is set to true, objects will be fetched from S3 using start_after
+  # so that filtering of old objects can happen on the server side, which
+  # should dramatically speed up the initial listing of a bucket with many
+  # objects. If set to true, you can use the sincedb_start_value parameter to
+  # start at a manually specified key.
+  config :use_start_after, :validate => :boolean, :default => false
+
+  # Used in concert with object_key_sincedb, this allows you to specify the
+  # object key to start at. This is useful if you want to start processing
+  # if you want to start from a specific key rather than the last key that
+  # was processed. Note that leaving this value the same across multiple restarts
+  # will cause the input to reprocess all objects that have been processed before.
+  # Can also be used without @object_key_sincedb to start at a specific last_modified
+  # date. (Format: 2023-10-27 15:00:12 UTC). Once the value has been set, the
+  # pipeline shuts down to prevent accidentally leaving this value set and surprising
+  # people upon restart later on.
+  config :sincedb_start_value, :validate => :string, :default => nil
+
+  # How many threads to use for processing. You may want to tweak this for whatever
+  # gives you the best performance for your particular environment.
+  config :processors_count, :validate => :number, :default => 20
+
+  # The number of events to fetch from S3 per request. The default is 1000.
+  config :batch_size, :validate => :number, :default => 1000
+
+  # Clear the sincedb database at startup and exit.
+  config :purge_sincedb, :validate => :boolean, :default => false
+
+  # Expire SinceDB entries that are sincedb_expire_secs older than the newest entry.
+  # This keeps the database from getting too large and slowing down processing. To avoid
+  # duplicate log entries when not using use_start_after, set this to a value larger than
+  # the oldest expected age of any file in the bucket.
+  config :sincedb_expire_secs, :validate => :number, :default => 120
+
+  # Number of times to retry processing a downloaded file when a broken pipe error occurs.
+  config :broken_pipe_retries, :validate => :number, :default => 10
+
+  public
+  def initialize(options = {})
     super
-    @cloudfront_fields_key = ecs_select[disabled: 'cloudfront_fields', v1: '[@metadata][s3][cloudfront][fields]']
-    @cloudfront_version_key = ecs_select[disabled: 'cloudfront_version', v1: '[@metadata][s3][cloudfront][version]']
+
+    if @purge_sincedb
+      @logger.info("Purging the sincedb and exiting", :sincedb_path => @sincedb_path)
+      ::File.unlink(@sincedb_path) rescue nil
+      return
+    end
+
+    @sincedb = SinceDB.new(
+      @sincedb_path,
+      @ignore_older,
+      @logger,
+      { :sincedb_expire_secs => @sincedb_expire_secs }
+    )
   end
 
   def register
     require "fileutils"
     require "digest/md5"
-    require "aws-sdk-resources"
 
     @logger.info("Registering", :bucket => @bucket, :region => @region)
-
-    s3 = get_s3object
-
-    @s3bucket = s3.bucket(@bucket)
 
     unless @backup_to_bucket.nil?
       @backup_bucket = s3.bucket(@backup_to_bucket)
@@ -128,342 +195,117 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   end
 
   def run(queue)
-    @current_thread = Thread.current
-    Stud.interval(@interval) do
-      process_files(queue)
-      stop unless @watch_for_new_files
-    end
-  end # def run
+    return if @purge_sincedb
 
-  def list_new_files
-    objects = []
-    found = false
-    current_time = Time.now
-    sincedb_time = sincedb.read
-    begin
-      @s3bucket.objects(:prefix => @prefix).each do |log|
-        found = true
-        @logger.debug('Found key', :key => log.key)
-        if ignore_filename?(log.key)
-          @logger.debug('Ignoring', :key => log.key)
-        elsif log.content_length <= 0
-          @logger.debug('Object Zero Length', :key => log.key)
-        elsif log.last_modified <= sincedb_time
-          @logger.debug('Object Not Modified', :key => log.key)
-        elsif log.last_modified > (current_time - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
-          @logger.debug('Object Modified After Cutoff Time', :key => log.key)
-        elsif (log.storage_class == 'GLACIER' || log.storage_class == 'DEEP_ARCHIVE') && !file_restored?(log.object)
-          @logger.debug('Object Archived to Glacier', :key => log.key)
-        else
-          objects << log
-          @logger.debug("Added to objects[]", :key => log.key, :length => objects.length)
-        end
-      end
-      @logger.info('No files found in bucket', :prefix => prefix) unless found
-    rescue Aws::Errors::ServiceError => e
-      @logger.error("Unable to list objects in bucket", :exception => e.class, :message => e.message, :backtrace => e.backtrace, :prefix => prefix)
+    if @sincedb_start_value && !@sincedb_start_value.empty?
+      reseed_sincedb
+      return
     end
-    objects.sort_by { |log| log.last_modified }
-  end # def fetch_new_files
 
-  def backup_to_bucket(object)
-    unless @backup_to_bucket.nil?
-      backup_key = "#{@backup_add_prefix}#{object.key}"
-      @backup_bucket.object(backup_key).copy_from(:copy_source => "#{object.bucket_name}/#{object.key}")
-      if @delete
-        object.delete()
-      end
-    end
-  end
+    @poller = Poller.new(
+      bucket_source,
+      @sincedb,
+      @logger,
+      {
+        :polling_interval => @interval,
+        :use_start_after => @use_start_after,
+        :batch_size => @batch_size,
+        :gzip_pattern => @gzip_pattern
+      }
+    )
 
-  def backup_to_dir(filename)
-    unless @backup_to_dir.nil?
-      FileUtils.cp(filename, @backup_to_dir)
+    validator = ProcessingPolicyValidator.new(@logger, *processing_policies)
+
+    # Each processor is run into his own thread.
+    processor = Processor.new(
+      validator,
+      EventProcessor.new(self, @codec, queue, @include_object_properties, @logger),
+      @logger,
+      post_processors
+    )
+
+    @manager = ProcessorManager.new(@logger, { :processor => processor,
+                                               :processors_count => @processors_count,
+                                               :broken_pipe_retries => @broken_pipe_retries })
+    @manager.start
+
+    # The poller get all the new files from the S3 buckets,
+    # all the actual work is done in a processor which will handle the following
+    # tasks:
+    #  - Downloading
+    #  - Uncompressing
+    #  - Reading (with metadata extraction for cloudfront)
+    #  - enqueue
+    #  - Backup strategy
+    #  - Book keeping
+    @poller.run do |remote_file|
+      remote_file.download_to_path = @temporary_directory
+      @manager.enqueue_work(remote_file)
     end
   end
-
-  def process_files(queue)
-    objects = list_new_files
-
-    objects.each do |log|
-      if stop?
-        break
-      else
-        process_log(queue, log)
-      end
-    end
-  end # def process_files
 
   def stop
-    # @current_thread is initialized in the `#run` method,
-    # this variable is needed because the `#stop` is a called in another thread
-    # than the `#run` method and requiring us to call stop! with a explicit thread.
-    Stud.stop!(@current_thread)
+    # Gracefully stop the polling of new S3 documents
+    # the manager will stop consuming events from the queue, but will block until
+    # all the processors thread are done with their work this may take some time if we are downloading large
+    # files.
+    @poller.stop unless @poller.nil?
+    @manager.stop unless @manager.nil?
+    @sincedb.close # Force a fsync of the database
   end
 
   private
 
-  # Read the content of the local file
-  #
-  # @param [Queue] Where to push the event
-  # @param [String] Which file to read from
-  # @param [S3Object] Source s3 object
-  # @return [Boolean] True if the file was completely read, false otherwise.
-  def process_local_log(queue, filename, object)
-    @logger.debug('Processing file', :filename => filename)
-    metadata = {}
-    # Currently codecs operates on bytes instead of stream.
-    # So all IO stuff: decompression, reading need to be done in the actual
-    # input and send as bytes to the codecs.
-    read_file(filename) do |line|
-      if stop?
-        @logger.warn("Logstash S3 input, stop reading in the middle of the file, we will read it again when logstash is started")
-        return false
-      end
+  def reseed_sincedb
+    start_object = bucket_source.objects(:prefix => @sincedb_start_value).first
 
-      @codec.decode(line) do |event|
-        # We are making an assumption concerning cloudfront
-        # log format, the user will use the plain or the line codec
-        # and the message key will represent the actual line content.
-        # If the event is only metadata the event will be drop.
-        # This was the behavior of the pre 1.5 plugin.
-        #
-        # The line need to go through the codecs to replace
-        # unknown bytes in the log stream before doing a regexp match or
-        # you will get a `Error: invalid byte sequence in UTF-8'
-        if event_is_metadata?(event)
-          @logger.debug('Event is metadata, updating the current cloudfront metadata', :event => event)
-          update_metadata(metadata, event)
-        else
-          push_decoded_event(queue, metadata, object, event)
-        end
-      end
-    end
-    # #ensure any stateful codecs (such as multi-line ) are flushed to the queue
-    @codec.flush do |event|
-      push_decoded_event(queue, metadata, object, event)
+    if start_object
+      @logger.info("Reseeding sincedb and shutting down", :value => @sincedb_start_value)
+      ::File.unlink(@sincedb_path) rescue nil
+      @sincedb.reseed(start_object)
+      return
     end
 
-    return true
-  end # def process_local_log
-
-  def push_decoded_event(queue, metadata, object, event)
-    decorate(event)
-
-    if @include_object_properties
-      event.set("[@metadata][s3]", object.data.to_h)
-    else
-      event.set("[@metadata][s3]", {})
-    end
-
-    event.set("[@metadata][s3][key]", object.key)
-    event.set(@cloudfront_version_key, metadata[:cloudfront_version]) unless metadata[:cloudfront_version].nil?
-    event.set(@cloudfront_fields_key, metadata[:cloudfront_fields]) unless metadata[:cloudfront_fields].nil?
-
-    queue << event
+    raise "Could not find sincedb_start_value object [sincedb_start_value=#{@sincedb_start_value}]"
   end
 
-  def event_is_metadata?(event)
-    return false unless event.get("message").class == String
-    line = event.get("message")
-    version_metadata?(line) || fields_metadata?(line)
+  def processing_policies
+    [
+      ProcessingPolicyValidator::SkipEndingDirectory,
+      ProcessingPolicyValidator::SkipEmptyFile,
+      ProcessingPolicyValidator::IgnoreNewerThan.new(@ignore_newer),
+      ProcessingPolicyValidator::IgnoreOlderThan.new(@ignore_older),
+      @exclude_pattern ? ProcessingPolicyValidator::ExcludePattern.new(@exclude_pattern) : nil,
+      @backup_prefix ? ProcessingPolicyValidator::ExcludeBackupedFiles.new(@backup_prefix) : nil,
+      ProcessingPolicyValidator::AlreadyProcessed.new(@sincedb),
+    ].compact
   end
 
-  def version_metadata?(line)
-    line.start_with?('#Version: ')
+  # PostProcessors are only run when everything went fine
+  # in the processing of the file.
+  def post_processors
+    [
+      @backup_bucket ? PostProcessor::BackupToBucket.new(backup_to_bucket, backup_add_prefix) : nil,
+      @backup_dir ? PostProcessor::BackupLocally.new(backup_to_dir) : nil,
+      @delete ? PostProcessor::DeleteFromSourceBucket.new : nil,
+      PostProcessor::UpdateSinceDB.new(@sincedb) # The last step is to make sure we save our file progress
+    ].compact
   end
 
-  def fields_metadata?(line)
-    line.start_with?('#Fields: ')
+  def bucket_source
+    Aws::S3::Bucket.new(:name => @bucket, :client => client)
   end
 
-  def update_metadata(metadata, event)
-    line = event.get('message').strip
-
-    if version_metadata?(line)
-      metadata[:cloudfront_version] = line.split(/#Version: (.+)/).last
-    end
-
-    if fields_metadata?(line)
-      metadata[:cloudfront_fields] = line.split(/#Fields: (.+)/).last
-    end
+  def client
+    opts = { :region => @region }
+    opts[:credentials] = credentials_options if @access_key_id && @secret_access_key
+    Aws::S3::Client.new(opts)
   end
 
-  def read_file(filename, &block)
-    if gzip?(filename)
-      read_gzip_file(filename, block)
-    else
-      read_plain_file(filename, block)
-    end
-  rescue => e
-    # skip any broken file
-    @logger.error("Failed to read file, processing skipped", :exception => e.class, :message => e.message, :filename => filename)
-  end
-
-  def read_plain_file(filename, block)
-    File.open(filename, 'rb') do |file|
-      file.each(&block)
-    end
-  end
-
-  def read_gzip_file(filename, block)
-    file_stream = FileInputStream.new(filename)
-    gzip_stream = GZIPInputStream.new(file_stream)
-    decoder = InputStreamReader.new(gzip_stream, "UTF-8")
-    buffered = BufferedReader.new(decoder)
-
-    while (line = buffered.readLine())
-      block.call(line)
-    end
-  ensure
-    buffered.close unless buffered.nil?
-    decoder.close unless decoder.nil?
-    gzip_stream.close unless gzip_stream.nil?
-    file_stream.close unless file_stream.nil?
-  end
-
-  def gzip?(filename)
-    Regexp.new(@gzip_pattern).match(filename)
-  end
-
-  def sincedb
-    @sincedb ||= if @sincedb_path.nil?
-                    @logger.info("Using default generated file for the sincedb", :filename => sincedb_file)
-                    SinceDB::File.new(sincedb_file)
-                  else
-                    @logger.info("Using the provided sincedb_path", :sincedb_path => @sincedb_path)
-                    SinceDB::File.new(@sincedb_path)
-                  end
-  end
-
-  def sincedb_file
-    digest = Digest::MD5.hexdigest("#{@bucket}+#{@prefix}")
-    dir = File.join(LogStash::SETTINGS.get_value("path.data"), "plugins", "inputs", "s3")
-    FileUtils::mkdir_p(dir)
-    path = File.join(dir, "sincedb_#{digest}")
-
-    # Migrate old default sincedb path to new one.
-    if ENV["HOME"]
-      # This is the old file path including the old digest mechanism.
-      # It remains as a way to automatically upgrade users with the old default ($HOME)
-      # to the new default (path.data)
-      old = File.join(ENV["HOME"], ".sincedb_" + Digest::MD5.hexdigest("#{@bucket}+#{@prefix}"))
-      if File.exist?(old)
-        logger.info("Migrating old sincedb in $HOME to {path.data}")
-        FileUtils.mv(old, path)
-      end
-    end
-
-    path
-  end
-
-  def ignore_filename?(filename)
-    if @prefix == filename
-      return true
-    elsif filename.end_with?("/")
-      return true
-    elsif (@backup_add_prefix && @backup_to_bucket == @bucket && filename =~ /^#{backup_add_prefix}/)
-      return true
-    elsif @exclude_pattern.nil?
-      return false
-    elsif filename =~ Regexp.new(@exclude_pattern)
-      return true
-    else
-      return false
-    end
-  end
-
-  def process_log(queue, log)
-    @logger.debug("Processing", :bucket => @bucket, :key => log.key)
-    object = @s3bucket.object(log.key)
-
-    filename = File.join(temporary_directory, File.basename(log.key))
-    if download_remote_file(object, filename)
-      if process_local_log(queue, filename, object)
-        if object.last_modified == log.last_modified
-          backup_to_bucket(object)
-          backup_to_dir(filename)
-          delete_file_from_bucket(object)
-          FileUtils.remove_entry_secure(filename, true)
-          sincedb.write(log.last_modified)
-        else
-          @logger.info("#{log.key} is updated at #{object.last_modified} and will process in the next cycle")
-        end
-      end
-    else
-      FileUtils.remove_entry_secure(filename, true)
-    end
-  end
-
-  # Stream the remove file to the local disk
-  #
-  # @param [S3Object] Reference to the remove S3 objec to download
-  # @param [String] The Temporary filename to stream to.
-  # @return [Boolean] True if the file was completely downloaded
-  def download_remote_file(remote_object, local_filename)
-    completed = false
-    @logger.debug("Downloading remote file", :remote_key => remote_object.key, :local_filename => local_filename)
-    File.open(local_filename, 'wb') do |s3file|
-      return completed if stop?
-      begin
-        remote_object.get(:response_target => s3file)
-        completed = true
-      rescue Aws::Errors::ServiceError => e
-        @logger.warn("Unable to download remote file", :exception => e.class, :message => e.message, :remote_key => remote_object.key)
-      end
-    end
-    completed
-  end
-
-  def delete_file_from_bucket(object)
-    if @delete and @backup_to_bucket.nil?
-      object.delete()
-    end
-  end
-
-  def get_s3object
-    s3 = Aws::S3::Resource.new(aws_options_hash || {})
-  end
-
-  def file_restored?(object)
-    begin
-      restore = object.data.restore
-      if restore && restore.match(/ongoing-request\s?=\s?["']false["']/)
-        if restore = restore.match(/expiry-date\s?=\s?["'](.*?)["']/)
-          expiry_date = DateTime.parse(restore[1])
-          return true if DateTime.now < expiry_date # restored
-        else
-          @logger.debug("No expiry-date header for restore request: #{object.data.restore}")
-          return nil # no expiry-date found for ongoing request
-        end
-      end
-    rescue => e
-      @logger.debug("Could not determine Glacier restore status", :exception => e.class, :message => e.message)
-    end
-    return false
-  end
-
-  module SinceDB
-    class File
-      def initialize(file)
-        @sincedb_path = file
-      end
-
-      # @return [Time]
-      def read
-        if ::File.exists?(@sincedb_path)
-          content = ::File.read(@sincedb_path).chomp.strip
-          # If the file was created but we didn't have the time to write to it
-          return content.empty? ? Time.new(0) : Time.parse(content)
-        else
-          return Time.new(0)
-        end
-      end
-
-      def write(since = nil)
-        since = Time.now if since.nil?
-        ::File.open(@sincedb_path, 'w') { |file| file.write(since.to_s) }
-      end
-    end
+  # TODO: verify all the use cases from the mixin
+  def credentials_options
+    Aws::Credentials.new(@access_key_id,
+                         @secret_access_key,
+                         @session_token)
   end
 end # class LogStash::Inputs::S3
