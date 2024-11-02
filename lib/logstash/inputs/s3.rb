@@ -380,7 +380,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     filename = File.join(temporary_directory, File.basename(log.key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        if object.last_modified == log.last_modified
+        if Time.parse(object.last_modified.to_s) == Time.parse(log.last_modified.to_s)
           backup_to_bucket(object)
           backup_to_dir(filename)
           delete_file_from_bucket(object)
