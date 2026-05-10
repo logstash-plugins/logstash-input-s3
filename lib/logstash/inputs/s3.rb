@@ -376,18 +376,22 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
   def process_log(queue, log)
     @logger.debug("Processing", :bucket => @bucket, :key => log.key)
     object = @s3bucket.object(log.key)
+    # Eager-loads the object data so the last_modified field is populated right before the download
+    object.load
 
     filename = File.join(temporary_directory, File.basename(log.key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        if object.last_modified == log.last_modified
+        refreshed_object = @s3bucket.object(log.key)
+        # If the object was modified during download and processing, do not backup/delete it and process it again during the next iteration
+        if object.last_modified == refreshed_object.last_modified
           backup_to_bucket(object)
           backup_to_dir(filename)
           delete_file_from_bucket(object)
           FileUtils.remove_entry_secure(filename, true)
-          sincedb.write(log.last_modified)
+          sincedb.write(object.last_modified)
         else
-          @logger.info("#{log.key} is updated at #{object.last_modified} and will process in the next cycle")
+          @logger.info("#{log.key} was updated at #{refreshed_object.last_modified} and will process in the next cycle")
         end
       end
     else

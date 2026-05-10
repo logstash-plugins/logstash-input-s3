@@ -32,6 +32,7 @@ describe LogStash::Inputs::S3 do
     FileUtils.mkdir_p(sincedb_path)
     Aws.config[:stub_responses] = true
     Thread.abort_on_exception = true
+    allow_any_instance_of(Aws::S3::Object).to receive(:load)
   end
 
   context "when interrupting the plugin" do
@@ -583,7 +584,7 @@ describe LogStash::Inputs::S3 do
       end
     end
 
-    context 's3 object updated after getting summary' do
+    context 's3 object updated during processing' do
       it 'should not update sincedb' do
         s3_summary = [
           double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
@@ -592,6 +593,8 @@ describe LogStash::Inputs::S3 do
 
         s3_objects = [
           double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'YESTERDAY', :last_modified => Time.now.round - day, :content_length => 5, :storage_class => 'STANDARD'),
+          double(:key => 'TODAY', :last_modified => Time.now.round - (cutoff * 10), :content_length => 5, :storage_class => 'STANDARD'),
           double(:key => 'TODAY_UPDATED', :last_modified => Time.now.round, :content_length => 5, :storage_class => 'STANDARD')
         ]
 
