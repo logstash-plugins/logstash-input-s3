@@ -148,7 +148,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
           @logger.debug('Ignoring', :key => log.key)
         elsif log.content_length <= 0
           @logger.debug('Object Zero Length', :key => log.key)
-        elsif log.last_modified <= sincedb_time
+        elsif log.last_modified.to_i <= sincedb_time.to_i
           @logger.debug('Object Not Modified', :key => log.key)
         elsif log.last_modified > (current_time - CUTOFF_SECOND).utc # file modified within last two seconds will be processed in next cycle
           @logger.debug('Object Modified After Cutoff Time', :key => log.key)
@@ -380,7 +380,7 @@ class LogStash::Inputs::S3 < LogStash::Inputs::Base
     filename = File.join(temporary_directory, File.basename(log.key))
     if download_remote_file(object, filename)
       if process_local_log(queue, filename, object)
-        if object.last_modified == log.last_modified
+        if object.last_modified.to_i == log.last_modified.to_i
           backup_to_bucket(object)
           backup_to_dir(filename)
           delete_file_from_bucket(object)
